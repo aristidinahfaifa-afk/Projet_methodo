@@ -1,0 +1,26 @@
+{
+  "palette": {
+    "seed": 0,
+    "selected": "adaptive-soft",
+    "custom": "e12729-f37324-f8cc1b-72b043-007f4e"
+  },
+  "mixColors": true,
+  "transition": true,
+  "accessibility": {
+    "highTextContrast": false
+  },
+  "knownTags": {
+    "bioinformatique": 1,
+    "clustering-hierarchique": 2,
+    "cours": 3,
+    "double-dipping": 7,
+    "erreur-de-type-i": 8,
+    "fibromes": 4,
+    "inference-selective": 5,
+    "scrna-seq": 6,
+    "statistiques": 9,
+    "tests-multiples": 10
+  },
+  "tagColors": {},
+  "_version": 4
+}
