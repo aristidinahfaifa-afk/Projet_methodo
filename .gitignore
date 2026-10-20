@@ -1,0 +1,12 @@
+# Obsidian
+notes/.obsidian/workspace.json
+notes/.obsidian/workspace-mobile.json
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+.Rapp.history
+
+# Données
+data/raw/
