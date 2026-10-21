@@ -1,6 +1,6 @@
 ---
-title: "Cours : l'erreur de type I, de la définition à l'inférence sélective"
-date: 2026-10-19
+title: "Cours : comprendre l'erreur de type I"
+date: 2026-10-20
 tags:
   - cours
   - statistiques
@@ -15,74 +15,3206 @@ aliases:
   - cours erreur de type I
 ---
 
-# L'erreur de type I : un cours pour comprendre pourquoi le test d'après clustering pose problème
+# Comprendre l'erreur de type I
 
-> [!abstract] Objectif du cours
-> Comprendre ce qu'est l'erreur de type I, comment elle est contrôlée dans le cas simple, puis pourquoi ce contrôle se casse dans trois situations : les tests multiples, les données dépendantes et la **sélection de l'hypothèse par les données** (double dipping). Cette dernière situation est celle de l'inférence sélective pour le clustering hiérarchique. Ce cours prolonge [[cours-scrnaseq-inference-selective]] (sections 3.6 et 6).
+> [!abstract] De quoi s'agit-il ?
+> Ce cours répond à trois questions, dans cet ordre :
+> 1. **Comment se tromper en testant une hypothèse, et à quelle fréquence ?** (leçons 1 à 3)
+> 2. **Pourquoi le « 5 % » ne tient plus quand des milliers de gènes sont testés, ou quand les cellules se ressemblent ?** (leçons 4 et 5)
+> 3. **Pourquoi un test réalisé après un clustering se trompe bien plus souvent que prévu ?** (leçon 6, le cœur du lien avec l'inférence sélective)
+>
+> Aucune biologie n'est nécessaire au départ : le raisonnement démarre avec une pièce de monnaie, puis monte par étapes jusqu'aux cellules et aux gènes. Ce cours prolonge [[cours-scrnaseq-inference-selective]] (sections 3.6 et 6).
 
-> [!info] Conventions de lecture
-> - Chaque affirmation factuelle renvoie à une **source** par une note de bas de page, par exemple [^np1933]. Les références complètes figurent en fin de document.
-> - Les **schémas** (blocs `mermaid`) sont des dessins pédagogiques réalisés pour ce cours. Ils illustrent les idées citées, ils ne reproduisent pas de figures d'articles.
-> - Les **figures en couleur** proviennent de **simulations réalisées pour ce cours** (code en annexe). Ce sont des expériences numériques reproductibles, pas des résultats publiés : elles sont signalées comme telles et ne remplacent pas les sources.
-> - Les **analogies** sont signalées comme telles.
-> - La section « [[#8. Limites et vérifications]] » indique ce qui a été lu en détail, ce qui ne l'a été que partiellement, et ce qui n'est pas couvert.
-
-## 0. Carte du cours
-
-```mermaid
-flowchart TB
-    A["1. Le cadre<br/>hypothèse nulle, erreurs I et II, puissance"] --> B["2. La p-value<br/>et son lien avec le seuil α"]
-    B --> C["3. Quand l'erreur de type I dérape<br/>tests multiples, dépendance, double dipping, flexibilité"]
-    C --> D["4. L'erreur de type I sélective<br/>le cœur du sujet"]
-    D --> E["5. Récapitulatif<br/>problème, cause, remède"]
-```
-
-### Vocabulaire en une page
-
-| Terme | Sens | Source |
-|---|---|---|
-| **Hypothèse nulle** $H_0$ | Hypothèse « rien de particulier » que le test cherche à réfuter | [^np1933] |
-| **Erreur de type I** | Rejeter $H_0$ alors qu'elle est vraie (« faux positif ») | [^np1933][^libretexts] |
-| **Erreur de type II** | Ne pas rejeter $H_0$ alors qu'elle est fausse (« faux négatif ») | [^np1933][^libretexts] |
-| **Niveau** $\alpha$ | $P(\text{rejeter } H_0 \mid H_0 \text{ vraie})$, fixé à l'avance | [^libretexts] |
-| **Puissance** $1-\beta$ | Probabilité de rejeter $H_0$ quand elle est fausse | [^libretexts] |
-| **p-value** | Probabilité, sous un modèle spécifié, d'obtenir un résumé des données au moins aussi extrême que celui observé | [^asa] |
-| **FWER** | Probabilité d'au moins un faux positif parmi les tests | [^cmu] |
-| **FDR** | Espérance de la proportion de faux positifs parmi les rejets | [^bh] |
-| **Erreur de type I sélective** | Probabilité de rejeter à tort, *sachant que* l'hypothèse testée a été choisie à partir des données | [^fithian] |
-
----
-
-## 1. Le cadre : tester une hypothèse
-
-### 1.1 Deux façons de se tromper
-
-Un test oppose une hypothèse nulle $H_0$ à une alternative. Deux erreurs sont possibles. Neyman et Pearson les décrivent dès 1933 : rejeter $H_0$ alors qu'elle est vraie (erreur de première espèce), ou l'accepter alors qu'elle est fausse (erreur de seconde espèce).[^np1933] Les manuels actuels parlent de **faux positif** pour l'erreur de type I et de **faux négatif** pour l'erreur de type II.[^libretexts]
-
-| | **Rejeter $H_0$** | **Ne pas rejeter $H_0$** |
-|---|---|---|
-| **$H_0$ est vraie** | **Erreur de type I** (probabilité $\alpha$) | Décision correcte |
-| **$H_0$ est fausse** | Décision correcte (puissance $1-\beta$) | **Erreur de type II** (probabilité $\beta$) |
-
-*(Tableau de décision : structure reprise de [^libretexts].)*
-
-> [!example] Analogie du tribunal (sourcée)
-> Dans l'analogie classique, $H_0$ est « l'accusé est innocent ». L'erreur de type I consiste à **condamner un innocent**, l'erreur de type II à **acquitter un coupable**.[^libretexts] Neyman et Pearson recourent eux aussi à l'image du tribunal : la gravité relative des deux erreurs dépend des conséquences, et les mathématiques montrent seulement comment contrôler chaque risque. Le choix de l'équilibre revient à l'investigateur.[^np1933]
+> [!info] Mode d'emploi
+> - Chaque leçon suit le même rythme : **intuition → calcul → définition → piège → exercice corrigé → à retenir**.
+> - Les affirmations qui viennent de la littérature portent une **note de bas de page** (par exemple [^np1933]). Les références complètes sont en fin de document.
+> - Les **calculs** (binomiaux, exemple de Benjamini–Hochberg) et les **simulations** (figures en couleur) ont été réalisés pour ce cours ; le code est en annexe. Ce sont des expériences reproductibles, pas des résultats publiés.
+> - Les **analogies** (flèche et cible, sondage dans une famille) sont signalées : elles ne viennent d'aucune source.
+> - Les exercices sont repliés : essayer avant d'ouvrir la correction.
+> - La section « [[#Limites et vérifications]] » dit ce qui a été lu en détail et ce qui ne l'a pas été.
 
 ```mermaid
 flowchart LR
-    H["Hypothèse H0 fixée<br/>avant de voir les données"] --> D["Données"]
-    D --> T["Statistique de test<br/>et p-value"]
-    T --> R{"p-value ≤ α ?"}
-    R -->|oui| Rej["Rejeter H0<br/>erreur de type I possible<br/>si H0 est vraie"]
-    R -->|non| Acc["Ne pas rejeter H0<br/>erreur de type II possible<br/>si H0 est fausse"]
+    L1["Leçon 1<br/>Une pièce de monnaie<br/>erreurs I et II"] --> L2["Leçon 2<br/>La p-value"]
+    L2 --> L3["Leçon 3<br/>Deux groupes de cellules<br/>la garantie et ses conditions"]
+    L3 --> L4["Leçon 4<br/>10 000 gènes<br/>tests multiples"]
+    L3 --> L5["Leçon 5<br/>Cellules corrélées<br/>pseudoréplication"]
+    L3 --> L6["Leçon 6<br/>Clustering puis test<br/>double dipping"]
+    L4 --> L7["Leçon 7<br/>Synthèse"]
+    L5 --> L7
+    L6 --> L7
 ```
 
-### 1.2 Le niveau α, l'erreur β et la puissance
+---
 
-- Le niveau $\alpha$ est la probabilité d'erreur de type I : $P(\text{rejeter } H_0 \mid H_0 \text{ vraie})$. Il est choisi à l'avance.[^libretexts]
-- $\beta$ est la probabilité d'erreur de type II : $P(\text{ne pas rejeter } H_0 \mid H_0 \text{ fausse})$. L'augmentation de la taille d'échantillon réduit $\beta$.[^libretexts]
-- La **puissance** vaut $1-\beta$ : c'est la probabilité de rejeter correctement une hypothèse nulle fausse.[^libretexts]
+## Leçon 1 : se tromper en décidant (la pièce de monnaie)
+
+> [!abstract] Objectif
+> Comprendre ce que sont les erreurs de type I et II, ce que valent exactement α et β sur un exemple entièrement calculable, et pourquoi les deux erreurs ne peuvent pas être réduites en même temps.
+
+### 1.1 La situation
+
+Une pièce est suspectée d'être truquée. Elle est lancée **10 fois**. Deux mondes sont possibles :
+
+- **$H_0$ (hypothèse nulle)** : la pièce est équilibrée, la probabilité de « face » vaut 0,5 ;
+- **$H_1$ (alternative)** : la pièce est biaisée vers « face » (ici, probabilité 0,8).
+
+Avant de lancer, une **règle de décision** est fixée : *« rejeter $H_0$ (déclarer la pièce truquée) si le nombre de faces est au moins égal à $k$ »*. Le choix de $k$ est précisément ce qui détermine les deux erreurs.
+
+```mermaid
+flowchart LR
+    R["Règle fixée AVANT les lancers :<br/>rejeter H0 si faces ≥ k"] --> L["10 lancers"]
+    L --> N["Nombre de faces X"]
+    N --> D{"X ≥ k ?"}
+    D -->|oui| Rej["Déclarer la pièce truquée"]
+    D -->|non| Acc["Ne pas la déclarer truquée"]
+```
+
+### 1.2 Les deux façons de se tromper
+
+| | **Rejeter $H_0$** (« pièce truquée ») | **Ne pas rejeter $H_0$** |
+|---|---|---|
+| **La pièce est honnête** ($H_0$ vraie) | **Erreur de type I** : accuser une pièce honnête | Décision correcte |
+| **La pièce est truquée** ($H_0$ fausse) | Décision correcte (probabilité = **puissance** $1-\beta$) | **Erreur de type II** : laisser passer une pièce truquée |
+
+Cette terminologie vient de Neyman et Pearson (erreur de première espèce : rejeter une hypothèse vraie ; erreur de seconde espèce : accepter une hypothèse fausse).[^np1933] Les manuels parlent aussi de **faux positif** (type I) et de **faux négatif** (type II).[^libretexts] Les probabilités associées sont :
+
+$$\alpha = P(\text{rejeter } H_0 \mid H_0 \text{ vraie}), \qquad \beta = P(\text{ne pas rejeter } H_0 \mid H_0 \text{ fausse}), \qquad \text{puissance} = 1-\beta.$$
+
+$\alpha$ s'appelle le **niveau** du test et se fixe à l'avance.[^libretexts]
+
+> [!example] Analogie du tribunal (présente dans les sources)
+> $H_0$ : « l'accusé est innocent ». Erreur de type I : condamner un innocent. Erreur de type II : acquitter un coupable.[^libretexts] Neyman et Pearson utilisent la même image : la gravité relative des deux erreurs dépend des conséquences, et les mathématiques montrent seulement comment contrôler chaque risque ; l'équilibre est choisi par l'investigateur.[^np1933]
+
+### 1.3 Calculer α et β, pas à pas
+
+Si la pièce est honnête, le nombre de faces $X$ sur 10 lancers suit une loi binomiale : $P(X=j)=\binom{10}{j}/2^{10}$, avec $2^{10}=1024$.
+
+**Règle « au moins 8 faces ».** Les cas favorables au rejet sont 8, 9 ou 10 faces :
+
+$$\alpha = P(X\ge 8\mid H_0)=\frac{\binom{10}{8}+\binom{10}{9}+\binom{10}{10}}{1024}=\frac{45+10+1}{1024}=\frac{56}{1024}\approx 0{,}055.$$
+
+Si la pièce est biaisée (probabilité 0,8 de face), la probabilité de rejeter devient $P(X\ge 8\mid p=0{,}8)\approx 0{,}678$ : c'est la puissance. L'erreur de type II vaut donc $\beta\approx 0{,}322$.
+
+Le même calcul pour d'autres seuils $k$ donne :
+
+| Règle : rejeter si faces $\ge k$ | $\alpha$ (pièce honnête) | Puissance (pièce biaisée, p = 0,8) | $\beta$ |
+|---|---|---|---|
+| $k=7$ | 0,172 | 0,879 | 0,121 |
+| $k=8$ | 0,055 | 0,678 | 0,322 |
+| $k=9$ | 0,011 | 0,376 | 0,624 |
+| $k=10$ | 0,001 | 0,107 | 0,893 |
+
+*(Calculs exacts réalisés pour ce cours, voir annexe.)*
+
+<div style="text-align:center">
+<svg style="max-width:100%;height:auto" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 576 388.8" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<defs>
+<style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+</defs>
+<g id="figure_1">
+<g id="patch_1">
+<path d="M 0 388.8
+L 576 388.8
+L 576 0
+L 0 0
+z
+" style="fill: #ffffff"/>
+</g>
+<g id="axes_1">
+<g id="patch_2">
+<path d="M 59.66832 165.659707
+L 564.12 165.659707
+L 564.12 28.051875
+L 59.66832 28.051875
+z
+" style="fill: #ffffff"/>
+</g>
+<g id="patch_3">
+<path d="M 82.597942 165.659707
+L 116.567752 165.659707
+L 116.567752 165.139647
+L 82.597942 165.139647
+z
+" clip-path="url(#pdb1ffe5717)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_4">
+<path d="M 125.060205 165.659707
+L 159.030015 165.659707
+L 159.030015 160.459109
+L 125.060205 160.459109
+z
+" clip-path="url(#pdb1ffe5717)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_5">
+<path d="M 167.522467 165.659707
+L 201.492277 165.659707
+L 201.492277 142.257015
+L 167.522467 142.257015
+z
+" clip-path="url(#pdb1ffe5717)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_6">
+<path d="M 209.98473 165.659707
+L 243.95454 165.659707
+L 243.95454 103.252527
+L 209.98473 103.252527
+z
+" clip-path="url(#pdb1ffe5717)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_7">
+<path d="M 252.446993 165.659707
+L 286.416803 165.659707
+L 286.416803 56.447142
+L 252.446993 56.447142
+z
+" clip-path="url(#pdb1ffe5717)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_8">
+<path d="M 294.909255 165.659707
+L 328.879065 165.659707
+L 328.879065 34.604629
+L 294.909255 34.604629
+z
+" clip-path="url(#pdb1ffe5717)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_9">
+<path d="M 337.371518 165.659707
+L 371.341328 165.659707
+L 371.341328 56.447142
+L 337.371518 56.447142
+z
+" clip-path="url(#pdb1ffe5717)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_10">
+<path d="M 379.83378 165.659707
+L 413.80359 165.659707
+L 413.80359 103.252527
+L 379.83378 103.252527
+z
+" clip-path="url(#pdb1ffe5717)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_11">
+<path d="M 422.296043 165.659707
+L 456.265853 165.659707
+L 456.265853 142.257015
+L 422.296043 142.257015
+z
+" clip-path="url(#pdb1ffe5717)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_12">
+<path d="M 464.758306 165.659707
+L 498.728116 165.659707
+L 498.728116 160.459109
+L 464.758306 160.459109
+z
+" clip-path="url(#pdb1ffe5717)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_13">
+<path d="M 507.220568 165.659707
+L 541.190378 165.659707
+L 541.190378 165.139647
+L 507.220568 165.139647
+z
+" clip-path="url(#pdb1ffe5717)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="matplotlib.axis_1">
+<g id="xtick_1">
+<g id="line2d_1">
+<defs>
+<path id="ma2bf66f694" d="M 0 0
+L 0 3.5
+" style="stroke: #000000; stroke-width: 0.8"/>
+</defs>
+<g>
+<use xlink:href="#ma2bf66f694" x="99.582847" y="165.659707" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+</g>
+<g id="xtick_2">
+<g id="line2d_2">
+<g>
+<use xlink:href="#ma2bf66f694" x="142.04511" y="165.659707" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+</g>
+<g id="xtick_3">
+<g id="line2d_3">
+<g>
+<use xlink:href="#ma2bf66f694" x="184.507372" y="165.659707" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+</g>
+<g id="xtick_4">
+<g id="line2d_4">
+<g>
+<use xlink:href="#ma2bf66f694" x="226.969635" y="165.659707" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+</g>
+<g id="xtick_5">
+<g id="line2d_5">
+<g>
+<use xlink:href="#ma2bf66f694" x="269.431898" y="165.659707" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+</g>
+<g id="xtick_6">
+<g id="line2d_6">
+<g>
+<use xlink:href="#ma2bf66f694" x="311.89416" y="165.659707" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+</g>
+<g id="xtick_7">
+<g id="line2d_7">
+<g>
+<use xlink:href="#ma2bf66f694" x="354.356423" y="165.659707" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+</g>
+<g id="xtick_8">
+<g id="line2d_8">
+<g>
+<use xlink:href="#ma2bf66f694" x="396.818685" y="165.659707" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+</g>
+<g id="xtick_9">
+<g id="line2d_9">
+<g>
+<use xlink:href="#ma2bf66f694" x="439.280948" y="165.659707" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+</g>
+<g id="xtick_10">
+<g id="line2d_10">
+<g>
+<use xlink:href="#ma2bf66f694" x="481.743211" y="165.659707" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+</g>
+<g id="xtick_11">
+<g id="line2d_11">
+<g>
+<use xlink:href="#ma2bf66f694" x="524.205473" y="165.659707" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+</g>
+</g>
+<g id="matplotlib.axis_2">
+<g id="ytick_1">
+<g id="line2d_12">
+<defs>
+<path id="m8d46084c7c" d="M 0 0
+L -3.5 0
+" style="stroke: #000000; stroke-width: 0.8"/>
+</defs>
+<g>
+<use xlink:href="#m8d46084c7c" x="59.66832" y="165.659707" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_1">
+<!-- 0.00 -->
+<g transform="translate(29.234883 170.987832) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-53f" d="M 2019 -63
+C 3059 -63 3656 809 3656 2325
+C 3656 3834 3050 4719 2019 4719
+C 988 4719 381 3834 381 2325
+C 381 806 981 -63 2019 -63
+z
+M 2019 456
+C 1338 456 953 1144 953 2325
+C 953 3509 1338 4203 2019 4203
+C 2700 4203 3084 3513 3084 2325
+C 3084 1144 2700 456 2019 456
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5e0" d="M 922 -41
+C 1156 -41 1344 147 1344 381
+C 1344 616 1156 803 922 803
+C 688 803 500 616 500 381
+C 500 147 688 -41 922 -41
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(86.84375 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(149.9375 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_2">
+<g id="line2d_13">
+<g>
+<use xlink:href="#m8d46084c7c" x="59.66832" y="139.032644" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_2">
+<!-- 0.05 -->
+<g transform="translate(29.487539 144.360769) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-545" d="M 1956 -63
+C 2853 -63 3509 594 3509 1488
+C 3509 2388 2881 3047 2028 3047
+C 1706 3047 1397 2934 1206 2775
+L 1181 2775
+L 1341 4134
+L 3291 4134
+L 3291 4656
+L 841 4656
+L 566 2350
+L 1122 2281
+C 1306 2422 1631 2525 1919 2525
+C 2503 2525 2928 2078 2928 1478
+C 2928 888 2519 459 1956 459
+C 1488 459 1106 759 1069 1175
+L 494 1175
+C 525 463 1138 -63 1956 -63
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(86.84375 0)"/>
+<use xlink:href="#Inter-Regular-545" transform="translate(149.9375 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_3">
+<g id="line2d_14">
+<g>
+<use xlink:href="#m8d46084c7c" x="59.66832" y="112.40558" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_3">
+<!-- 0.10 -->
+<g transform="translate(32.37332 117.733705) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-540" d="M 2041 4656
+L 1313 4656
+L 300 3909
+L 300 3272
+L 1425 4106
+L 1456 4106
+L 1456 0
+L 2041 0
+L 2041 4656
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-540" transform="translate(80.734375 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(121.40625 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_4">
+<g id="line2d_15">
+<g>
+<use xlink:href="#m8d46084c7c" x="59.66832" y="85.778517" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_4">
+<!-- 0.15 -->
+<g transform="translate(32.625977 91.106642) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-540" transform="translate(80.734375 0)"/>
+<use xlink:href="#Inter-Regular-545" transform="translate(121.40625 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_5">
+<g id="line2d_16">
+<g>
+<use xlink:href="#m8d46084c7c" x="59.66832" y="59.151453" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_5">
+<!-- 0.20 -->
+<g transform="translate(29.188477 64.479578) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-541" d="M 481 0
+L 3447 0
+L 3447 522
+L 1300 522
+L 1300 559
+L 2319 1644
+C 3141 2519 3369 2916 3369 3419
+C 3369 4147 2778 4719 1947 4719
+C 1119 4719 494 4159 494 3334
+L 1063 3334
+C 1063 3859 1400 4203 1931 4203
+C 2428 4203 2806 3900 2806 3413
+C 2806 2984 2544 2666 2028 2106
+L 481 428
+L 481 0
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-541" transform="translate(89.375 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(150.359375 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_6">
+<g id="line2d_17">
+<g>
+<use xlink:href="#m8d46084c7c" x="59.66832" y="32.52439" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_6">
+<!-- 0.25 -->
+<g transform="translate(29.441133 37.852515) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-541" transform="translate(89.375 0)"/>
+<use xlink:href="#Inter-Regular-545" transform="translate(150.359375 0)"/>
+</g>
+</g>
+</g>
+<g id="text_7">
+<!-- Probabilité -->
+<g transform="translate(22.535156 124.473525) rotate(-90) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-178" d="M 563 0
+L 1156 0
+L 1156 1684
+L 2159 1684
+C 3244 1684 3744 2344 3744 3175
+C 3744 4003 3244 4656 2156 4656
+L 563 4656
+L 563 0
+z
+M 1156 2206
+L 1156 4134
+L 2125 4134
+C 2869 4134 3153 3725 3153 3175
+C 3153 2622 2869 2206 2131 2206
+L 1156 2206
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-356" d="M 494 0
+L 1056 0
+L 1056 2188
+C 1056 2659 1425 3000 1928 3000
+C 2078 3000 2231 2975 2266 2969
+L 2266 3534
+C 2200 3538 2063 3544 1981 3544
+C 1566 3544 1203 3309 1075 2956
+L 1038 2956
+L 1038 3494
+L 494 3494
+L 494 0
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-318" d="M 1916 -75
+C 2869 -75 3513 647 3513 1725
+C 3513 2819 2869 3538 1916 3538
+C 966 3538 325 2819 325 1725
+C 325 647 966 -75 1916 -75
+z
+M 1916 428
+C 1219 428 897 1038 897 1725
+C 897 2422 1219 3034 1916 3034
+C 2622 3034 2944 2419 2944 1725
+C 2944 1038 2622 428 1916 428
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-243" d="M 2116 -75
+C 2988 -75 3594 625 3594 1738
+C 3594 2844 2984 3538 2113 3538
+C 1431 3538 1216 3119 1100 2934
+L 1056 2934
+L 1056 4656
+L 494 4656
+L 494 0
+L 1038 0
+L 1038 541
+L 1100 541
+C 1216 347 1450 -75 2116 -75
+z
+M 2031 428
+C 1397 428 1050 966 1050 1744
+C 1050 2516 1388 3034 2031 3034
+C 2694 3034 3022 2469 3022 1744
+C 3022 1009 2684 428 2031 428
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-1fc" d="M 1472 -81
+C 2063 -81 2391 228 2509 475
+L 2547 475
+L 2547 0
+L 3100 0
+L 3100 2303
+C 3100 3394 2259 3538 1791 3538
+C 1250 3538 650 3344 381 2709
+L 922 2531
+C 1031 2775 1303 3044 1806 3044
+C 2291 3044 2538 2794 2538 2359
+L 2538 2341
+C 2538 2081 2263 2100 1641 2022
+C 994 1941 281 1794 281 994
+C 281 306 809 -81 1472 -81
+z
+M 1569 416
+C 1150 416 847 603 847 966
+C 847 1363 1206 1494 1616 1547
+C 1831 1575 2444 1638 2538 1747
+L 2538 1263
+C 2538 834 2191 416 1569 416
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-2b2" d="M 494 0
+L 1056 0
+L 1056 3494
+L 494 3494
+L 494 0
+z
+M 778 4066
+C 994 4066 1172 4231 1172 4438
+C 1172 4644 994 4809 778 4809
+C 566 4809 388 4644 388 4438
+C 388 4231 566 4066 778 4066
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-2e2" d="M 1056 4656
+L 494 4656
+L 494 0
+L 1056 0
+L 1056 4656
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-37b" d="M 1869 3494
+L 1150 3494
+L 1150 4325
+L 588 4325
+L 588 3494
+L 63 3494
+L 63 3013
+L 588 3013
+L 588 863
+C 588 291 944 -44 1547 -44
+C 1691 -44 1850 -22 1966 19
+L 1850 494
+C 1756 475 1634 456 1563 456
+C 1266 456 1150 594 1150 906
+L 1150 3013
+L 1869 3013
+L 1869 3494
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-26b" d="M 1963 -75
+C 2678 -75 3200 284 3363 813
+L 2819 963
+C 2688 606 2378 425 1966 425
+C 1347 425 922 825 894 1556
+L 3419 1556
+L 3419 1791
+C 3419 3081 2638 3538 1897 3538
+C 944 3538 325 2791 325 1719
+C 325 644 950 -75 1963 -75
+z
+M 897 2031
+C 931 2566 1297 3038 1897 3038
+C 2472 3038 2794 2625 2847 2031
+L 897 2031
+z
+M 1638 3950
+L 2097 3950
+L 2703 4869
+L 2075 4869
+L 1638 3950
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-178"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(63.875 0)"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(99.859375 0)"/>
+<use xlink:href="#Inter-Regular-243" transform="translate(159.828125 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(222.046875 0)"/>
+<use xlink:href="#Inter-Regular-243" transform="translate(278.203125 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(339.4375 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(363.65625 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(387.875 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(412.09375 0)"/>
+<use xlink:href="#Inter-Regular-26b" transform="translate(443.84375 0)"/>
+</g>
+</g>
+</g>
+<g id="patch_14">
+<path d="M 59.66832 165.659707
+L 59.66832 28.051875
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+</g>
+<g id="patch_15">
+<path d="M 59.66832 165.659707
+L 564.12 165.659707
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+</g>
+<g id="text_8">
+<!-- aire rouge = α = 0,055 -->
+<g style="fill: #c53030" transform="translate(439.280948 59.151453) scale(0.1 -0.1)">
+<defs>
+<path id="Inter-Regular-267" d="M 1963 -75
+C 2678 -75 3200 284 3363 813
+L 2819 963
+C 2688 606 2378 425 1966 425
+C 1347 425 922 825 894 1556
+L 3419 1556
+L 3419 1791
+C 3419 3081 2638 3538 1897 3538
+C 944 3538 325 2791 325 1719
+C 325 644 950 -75 1963 -75
+z
+M 897 2031
+C 931 2566 1297 3038 1897 3038
+C 2472 3038 2794 2625 2847 2031
+L 897 2031
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-6eb" transform="scale(0.015625)"/>
+<path id="Inter-Regular-395" d="M 1678 -44
+C 2138 -44 2519 144 2747 653
+L 2747 0
+L 3291 0
+L 3291 3494
+L 2725 3494
+L 2725 1400
+C 2725 803 2347 463 1847 463
+C 1359 463 1056 784 1056 1322
+L 1056 3494
+L 494 3494
+L 494 1275
+C 494 391 972 -44 1678 -44
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-293" d="M 1909 -1381
+C 2759 -1381 3431 -994 3431 -91
+L 3431 3494
+L 2884 3494
+L 2884 2934
+L 2831 2934
+C 2713 3122 2488 3538 1813 3538
+C 941 3538 325 2844 325 1763
+C 325 666 963 56 1800 56
+C 2475 56 2697 441 2816 641
+L 2869 641
+L 2869 -59
+C 2869 -634 2466 -891 1909 -891
+C 1294 -891 1075 -578 928 -375
+L 472 -669
+C 688 -1053 1134 -1381 1909 -1381
+z
+M 1894 556
+C 1238 556 897 1056 897 1775
+C 897 2472 1228 3034 1894 3034
+C 2538 3034 2875 2516 2875 1775
+C 2875 1013 2528 556 1894 556
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5f2" d="M 706 884
+L 3531 884
+L 3531 1403
+L 706 1403
+L 706 884
+z
+M 706 2241
+L 3531 2241
+L 3531 2759
+L 706 2759
+L 706 2241
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-458" d="M 1859 -75
+C 2675 -75 3038 538 3209 1072
+L 3472 0
+L 4003 0
+L 3478 1747
+L 3953 3494
+L 3422 3494
+L 3197 2444
+C 3047 2972 2691 3538 1884 3538
+C 969 3538 325 2800 325 1731
+C 325 675 956 -75 1859 -75
+z
+M 3047 1747
+L 3044 1738
+C 2947 1288 2644 428 1869 428
+C 1275 428 897 931 897 1728
+C 897 2538 1284 3034 1900 3034
+C 2694 3034 2938 2194 3044 1756
+L 3047 1747
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5ff" d="M 706 1394
+L 3531 1394
+L 3531 1913
+L 706 1913
+L 706 1394
+z
+M 706 2750
+L 3531 2750
+L 3531 3269
+L 706 3269
+L 706 2750
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5df" d="M 400 -1122
+L 831 -1122
+L 1319 650
+L 675 650
+L 400 -1122
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-1fc"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(56.15625 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(80.375 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(116.359375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(174.65625 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(202.78125 0)"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(238.765625 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(298.734375 0)"/>
+<use xlink:href="#Inter-Regular-293" transform="translate(357.859375 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(419.1875 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(477.484375 0)"/>
+<use xlink:href="#Inter-Regular-5f2" transform="translate(505.609375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(571.765625 0)"/>
+<use xlink:href="#Inter-Regular-458" transform="translate(599.890625 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(666.296875 0)"/>
+<use xlink:href="#Inter-Regular-5ff" transform="translate(694.421875 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(760.578125 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(788.703125 0)"/>
+<use xlink:href="#Inter-Regular-5df" transform="translate(849.265625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(875.546875 0)"/>
+<use xlink:href="#Inter-Regular-545" transform="translate(938.640625 0)"/>
+<use xlink:href="#Inter-Regular-545" transform="translate(999.4375 0)"/>
+</g>
+</g>
+<g id="text_9">
+<!-- Pièce équilibrée ($H_0$ : p = 0,5) : règle « rejeter si au moins 8 faces » -->
+<g transform="translate(145.20666 22.051875) scale(0.105 -0.105)">
+<defs>
+<path id="Inter-Regular-26a" d="M 1963 -75
+C 2678 -75 3200 284 3363 813
+L 2819 963
+C 2688 606 2378 425 1966 425
+C 1347 425 922 825 894 1556
+L 3419 1556
+L 3419 1791
+C 3419 3081 2638 3538 1897 3538
+C 944 3538 325 2791 325 1719
+C 325 644 950 -75 1963 -75
+z
+M 897 2031
+C 931 2566 1297 3038 1897 3038
+C 2472 3038 2794 2625 2847 2031
+L 897 2031
+z
+M 1663 3950
+L 2125 3950
+L 1688 4869
+L 1059 4869
+L 1663 3950
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-24b" d="M 1916 -75
+C 2600 -75 3156 297 3344 919
+L 2806 1072
+C 2703 694 2384 428 1916 428
+C 1219 428 897 1038 897 1725
+C 897 2422 1219 3034 1916 3034
+C 2375 3034 2688 2778 2791 2419
+L 3331 2572
+C 3141 3181 2591 3538 1916 3538
+C 966 3538 325 2819 325 1725
+C 325 647 966 -75 1916 -75
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-353" d="M 3425 -1306
+L 3425 3494
+L 2881 3494
+L 2881 2934
+L 2819 2934
+C 2703 3119 2488 3538 1806 3538
+C 934 3538 325 2844 325 1738
+C 325 625 931 -75 1803 -75
+C 2469 -75 2703 347 2819 541
+L 2863 541
+L 2863 -1306
+L 3425 -1306
+z
+M 1888 428
+C 1234 428 897 1009 897 1744
+C 897 2469 1225 3034 1888 3034
+C 2531 3034 2869 2516 2869 1744
+C 2869 966 2522 428 1888 428
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-59f" d="M 681 1897
+C 681 984 956 31 1488 -872
+L 2034 -872
+C 1497 238 1253 1069 1253 1897
+C 1253 2809 1550 3956 2034 4941
+L 1488 4941
+C 1019 4169 681 2913 681 1897
+z
+" transform="scale(0.015625)"/>
+<path id="DejaVuSans-Oblique-2b" d="M 1081 4666
+L 1716 4666
+L 1344 2753
+L 3634 2753
+L 4006 4666
+L 4641 4666
+L 3731 0
+L 3097 0
+L 3531 2222
+L 1241 2222
+L 806 0
+L 172 0
+L 1081 4666
+z
+" transform="scale(0.015625)"/>
+<path id="DejaVuSans-13" d="M 2034 4250
+Q 1547 4250 1301 3770
+Q 1056 3291 1056 2328
+Q 1056 1369 1301 889
+Q 1547 409 2034 409
+Q 2525 409 2770 889
+Q 3016 1369 3016 2328
+Q 3016 3291 2770 3770
+Q 2525 4250 2034 4250
+z
+M 2034 4750
+Q 2819 4750 3233 4129
+Q 3647 3509 3647 2328
+Q 3647 1150 3233 529
+Q 2819 -91 2034 -91
+Q 1250 -91 836 529
+Q 422 1150 422 2328
+Q 422 3509 836 4129
+Q 1250 4750 2034 4750
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5e3" d="M 922 -41
+C 1156 -41 1344 147 1344 381
+C 1344 616 1156 803 922 803
+C 688 803 500 616 500 381
+C 500 147 688 -41 922 -41
+z
+M 922 2488
+C 1156 2488 1344 2675 1344 2909
+C 1344 3144 1156 3331 922 3331
+C 688 3331 500 3144 500 2909
+C 500 2675 688 2488 922 2488
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-34d" d="M 494 -1306
+L 1056 -1306
+L 1056 541
+L 1100 541
+C 1216 347 1450 -75 2116 -75
+C 2988 -75 3594 625 3594 1738
+C 3594 2844 2984 3538 2113 3538
+C 1431 3538 1216 3119 1100 2934
+L 1038 2934
+L 1038 3494
+L 494 3494
+L 494 -1306
+z
+M 2031 428
+C 1397 428 1050 966 1050 1744
+C 1050 2516 1388 3034 2031 3034
+C 2694 3034 3022 2469 3022 1744
+C 3022 1009 2684 428 2031 428
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5a0" d="M 300 -872
+L 847 -872
+C 1369 16 1653 969 1653 1897
+C 1653 2909 1316 4172 847 4941
+L 300 4941
+C 784 3956 1081 2809 1081 1897
+C 1081 1094 853 269 300 -872
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5ec" d="M 1566 450
+L 2209 450
+L 978 1925
+L 2209 3400
+L 1566 3400
+L 313 1925
+L 1566 450
+z
+M 2834 450
+L 3478 450
+L 2247 1925
+L 3478 3400
+L 2834 3400
+L 1581 1925
+L 2834 450
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-2d1" d="M 491 3494
+L 491 -250
+C 491 -597 347 -788 22 -788
+L -81 -788
+L -81 -1306
+L 31 -1306
+C 709 -1306 1059 -916 1056 -250
+L 1056 3494
+L 491 3494
+z
+M 775 4066
+C 991 4066 1169 4231 1169 4438
+C 1169 4644 991 4809 775 4809
+C 563 4809 384 4644 384 4438
+C 384 4231 563 4066 775 4066
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-369" d="M 1681 -75
+C 2500 -75 3059 372 3059 984
+C 3059 1463 2763 1778 2128 1928
+L 1600 2053
+C 1191 2150 1013 2294 1013 2553
+C 1013 2844 1325 3059 1741 3059
+C 2191 3059 2388 2816 2484 2566
+L 2994 2697
+C 2834 3188 2456 3538 1738 3538
+C 994 3538 444 3119 444 2519
+C 444 2028 747 1716 1381 1566
+L 1963 1428
+C 2306 1347 2475 1188 2475 947
+C 2475 659 2163 419 1675 419
+C 1256 419 972 591 872 975
+L 338 847
+C 463 244 963 -75 1681 -75
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-300" d="M 494 0
+L 1056 0
+L 1056 2200
+C 1056 2756 1428 3044 1838 3044
+C 2231 3044 2522 2784 2522 2397
+L 2522 0
+L 3084 0
+L 3084 2281
+C 3084 2722 3372 3044 3844 3044
+C 4219 3044 4547 2844 4547 2341
+L 4547 0
+L 5113 0
+L 5113 2356
+C 5113 3166 4619 3556 4013 3556
+C 3506 3556 3078 3284 2913 2844
+C 2788 3275 2481 3556 2022 3556
+C 1609 3556 1216 3325 1044 2853
+L 1041 3494
+L 494 3494
+L 494 0
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-307" d="M 1056 2094
+C 1056 2691 1434 3031 1938 3031
+C 2425 3031 2725 2709 2725 2172
+L 2725 0
+L 3288 0
+L 3288 2219
+C 3288 3103 2813 3538 2106 3538
+C 1638 3538 1263 3341 1038 2847
+L 1034 3494
+L 494 3494
+L 494 0
+L 1056 0
+L 1056 2094
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-549" d="M 1978 -63
+C 2916 -63 3578 478 3578 1238
+C 3578 1825 3175 2325 2669 2419
+L 2669 2444
+C 3109 2559 3403 2988 3403 3481
+C 3403 4191 2794 4719 1978 4719
+C 1150 4719 550 4191 550 3481
+C 550 2988 838 2559 1291 2444
+L 1291 2419
+C 769 2325 381 1825 381 1238
+C 381 478 1031 -63 1978 -63
+z
+M 1978 453
+C 1350 453 966 775 966 1269
+C 966 1784 1391 2153 1978 2153
+C 2553 2153 2984 1784 2984 1269
+C 2984 775 2594 453 1978 453
+z
+M 1978 2650
+C 1475 2650 1125 2966 1125 3438
+C 1125 3903 1463 4206 1978 4206
+C 2484 4206 2828 3903 2828 3438
+C 2828 2966 2469 2650 1978 2650
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-288" d="M 2119 3494
+L 1313 3494
+L 1313 3834
+C 1313 4172 1463 4353 1809 4353
+C 1966 4353 2053 4319 2113 4300
+L 2269 4781
+C 2184 4819 2009 4875 1744 4875
+C 1234 4875 750 4566 750 3959
+L 750 3494
+L 63 3494
+L 63 3013
+L 750 3013
+L 750 0
+L 1313 0
+L 1313 3013
+L 2119 3013
+L 2119 3494
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5ed" d="M 250 450
+L 894 450
+L 2147 1925
+L 894 3400
+L 250 3400
+L 1481 1925
+L 250 450
+z
+M 1519 450
+L 2163 450
+L 3416 1925
+L 2163 3400
+L 1519 3400
+L 2750 1925
+L 1519 450
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-178" transform="translate(0 0.796875)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(63.867188 0.796875)"/>
+<use xlink:href="#Inter-Regular-26a" transform="translate(88.085938 0.796875)"/>
+<use xlink:href="#Inter-Regular-24b" transform="translate(146.386719 0.796875)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(203.515625 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(261.816406 0.796875)"/>
+<use xlink:href="#Inter-Regular-26b" transform="translate(289.941406 0.796875)"/>
+<use xlink:href="#Inter-Regular-353" transform="translate(348.242188 0.796875)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(409.472656 0.796875)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(468.603516 0.796875)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(492.822266 0.796875)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(517.041016 0.796875)"/>
+<use xlink:href="#Inter-Regular-243" transform="translate(541.259766 0.796875)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(602.490234 0.796875)"/>
+<use xlink:href="#Inter-Regular-26b" transform="translate(640.136719 0.796875)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(698.4375 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(756.738281 0.796875)"/>
+<use xlink:href="#Inter-Regular-59f" transform="translate(784.863281 0.796875)"/>
+<use xlink:href="#DejaVuSans-Oblique-2b" transform="translate(821.337891 0.796875)"/>
+<use xlink:href="#DejaVuSans-13" transform="translate(896.533203 -14.203076) scale(0.7)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(943.803711 0.796875)"/>
+<use xlink:href="#Inter-Regular-5e3" transform="translate(971.928711 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1000.737305 0.796875)"/>
+<use xlink:href="#Inter-Regular-34d" transform="translate(1028.862305 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1090.092773 0.796875)"/>
+<use xlink:href="#Inter-Regular-5f2" transform="translate(1118.217773 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1184.379883 0.796875)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(1212.504883 0.796875)"/>
+<use xlink:href="#Inter-Regular-5df" transform="translate(1275.59082 0.796875)"/>
+<use xlink:href="#Inter-Regular-545" transform="translate(1304.399414 0.796875)"/>
+<use xlink:href="#Inter-Regular-5a0" transform="translate(1365.19043 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1401.665039 0.796875)"/>
+<use xlink:href="#Inter-Regular-5e3" transform="translate(1429.790039 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1458.598633 0.796875)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(1486.723633 0.796875)"/>
+<use xlink:href="#Inter-Regular-26a" transform="translate(1524.370117 0.796875)"/>
+<use xlink:href="#Inter-Regular-293" transform="translate(1582.670898 0.796875)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(1643.999023 0.796875)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1668.217773 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1726.518555 0.796875)"/>
+<use xlink:href="#Inter-Regular-5ec" transform="translate(1754.643555 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1812.895508 0.796875)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(1841.020508 0.796875)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1878.666992 0.796875)"/>
+<use xlink:href="#Inter-Regular-2d1" transform="translate(1936.967773 0.796875)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1961.186523 0.796875)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(2019.487305 0.796875)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(2052.202148 0.796875)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(2110.50293 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(2148.149414 0.796875)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(2176.274414 0.796875)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(2229.057617 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(2253.276367 0.796875)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(2281.401367 0.796875)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(2337.553711 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(2396.68457 0.796875)"/>
+<use xlink:href="#Inter-Regular-300" transform="translate(2424.80957 0.796875)"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(2512.407227 0.796875)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(2572.368164 0.796875)"/>
+<use xlink:href="#Inter-Regular-307" transform="translate(2596.586914 0.796875)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(2655.668945 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(2708.452148 0.796875)"/>
+<use xlink:href="#Inter-Regular-549" transform="translate(2736.577148 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(2798.442383 0.796875)"/>
+<use xlink:href="#Inter-Regular-288" transform="translate(2826.567383 0.796875)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(2863.579102 0.796875)"/>
+<use xlink:href="#Inter-Regular-24b" transform="translate(2919.731445 0.796875)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(2976.860352 0.796875)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(3035.161133 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(3087.944336 0.796875)"/>
+<use xlink:href="#Inter-Regular-5ed" transform="translate(3116.069336 0.796875)"/>
+</g>
+</g>
+</g>
+<g id="axes_2">
+<g id="patch_16">
+<path d="M 59.66832 339.300859
+L 564.12 339.300859
+L 564.12 201.693027
+L 59.66832 201.693027
+z
+" style="fill: #ffffff"/>
+</g>
+<g id="patch_17">
+<path d="M 82.597942 339.300859
+L 116.567752 339.300859
+L 116.567752 339.300815
+L 82.597942 339.300815
+z
+" clip-path="url(#pbcdfba599b)" style="fill: #718096; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_18">
+<path d="M 125.060205 339.300859
+L 159.030015 339.300859
+L 159.030015 339.299082
+L 125.060205 339.299082
+z
+" clip-path="url(#pbcdfba599b)" style="fill: #718096; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_19">
+<path d="M 167.522467 339.300859
+L 201.492277 339.300859
+L 201.492277 339.268864
+L 167.522467 339.268864
+z
+" clip-path="url(#pbcdfba599b)" style="fill: #718096; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_20">
+<path d="M 209.98473 339.300859
+L 243.95454 339.300859
+L 243.95454 338.95957
+L 209.98473 338.95957
+z
+" clip-path="url(#pbcdfba599b)" style="fill: #718096; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_21">
+<path d="M 252.446993 339.300859
+L 286.416803 339.300859
+L 286.416803 336.911835
+L 252.446993 336.911835
+z
+" clip-path="url(#pbcdfba599b)" style="fill: #718096; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_22">
+<path d="M 294.909255 339.300859
+L 328.879065 339.300859
+L 328.879065 327.83354
+L 294.909255 327.83354
+z
+" clip-path="url(#pbcdfba599b)" style="fill: #718096; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_23">
+<path d="M 337.371518 339.300859
+L 371.341328 339.300859
+L 371.341328 301.076462
+L 337.371518 301.076462
+z
+" clip-path="url(#pbcdfba599b)" style="fill: #718096; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_24">
+<path d="M 379.83378 339.300859
+L 413.80359 339.300859
+L 413.80359 251.930807
+L 379.83378 251.930807
+z
+" clip-path="url(#pbcdfba599b)" style="fill: #718096; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_25">
+<path d="M 422.296043 339.300859
+L 456.265853 339.300859
+L 456.265853 208.245781
+L 422.296043 208.245781
+z
+" clip-path="url(#pbcdfba599b)" style="fill: #2f855a; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_26">
+<path d="M 464.758306 339.300859
+L 498.728116 339.300859
+L 498.728116 222.807457
+L 464.758306 222.807457
+z
+" clip-path="url(#pbcdfba599b)" style="fill: #2f855a; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_27">
+<path d="M 507.220568 339.300859
+L 541.190378 339.300859
+L 541.190378 292.703498
+L 507.220568 292.703498
+z
+" clip-path="url(#pbcdfba599b)" style="fill: #2f855a; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="matplotlib.axis_3">
+<g id="xtick_12">
+<g id="line2d_18">
+<g>
+<use xlink:href="#ma2bf66f694" x="99.582847" y="339.300859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_10">
+<!-- 0 -->
+<g transform="translate(96.112691 356.957109) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+</g>
+</g>
+</g>
+<g id="xtick_13">
+<g id="line2d_19">
+<g>
+<use xlink:href="#ma2bf66f694" x="142.04511" y="339.300859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_11">
+<!-- 1 -->
+<g transform="translate(139.808157 356.957109) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-540"/>
+</g>
+</g>
+</g>
+<g id="xtick_14">
+<g id="line2d_20">
+<g>
+<use xlink:href="#ma2bf66f694" x="184.507372" y="339.300859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_12">
+<!-- 2 -->
+<g transform="translate(181.153232 356.957109) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-541"/>
+</g>
+</g>
+</g>
+<g id="xtick_15">
+<g id="line2d_21">
+<g>
+<use xlink:href="#ma2bf66f694" x="226.969635" y="339.300859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_13">
+<!-- 3 -->
+<g transform="translate(223.572526 356.957109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-543" d="M 1984 -63
+C 2897 -63 3572 503 3572 1266
+C 3572 1853 3225 2284 2631 2381
+L 2631 2419
+C 3106 2559 3403 2944 3403 3469
+C 3403 4131 2872 4719 2003 4719
+C 1184 4719 516 4216 491 3484
+L 1063 3484
+C 1081 3938 1516 4203 1991 4203
+C 2497 4203 2822 3900 2822 3438
+C 2822 2956 2447 2644 1903 2644
+L 1525 2644
+L 1525 2128
+L 1903 2128
+C 2594 2128 2984 1775 2984 1272
+C 2984 788 2559 459 1975 459
+C 1444 459 1025 731 991 1175
+L 391 1175
+C 422 438 1072 -63 1984 -63
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-543"/>
+</g>
+</g>
+</g>
+<g id="xtick_16">
+<g id="line2d_22">
+<g>
+<use xlink:href="#ma2bf66f694" x="269.431898" y="339.300859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_14">
+<!-- 4 -->
+<g transform="translate(265.879241 356.957109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-544" d="M 375 947
+L 2566 947
+L 2566 0
+L 3134 0
+L 3134 947
+L 3766 947
+L 3766 1469
+L 3134 1469
+L 3134 4656
+L 2413 4656
+L 375 1431
+L 375 947
+z
+M 2569 1469
+L 1009 1469
+L 1009 1506
+L 2531 3913
+L 2569 3913
+L 2569 1469
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-544"/>
+</g>
+</g>
+</g>
+<g id="xtick_17">
+<g id="line2d_23">
+<g>
+<use xlink:href="#ma2bf66f694" x="311.89416" y="339.300859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_15">
+<!-- 5 -->
+<g transform="translate(308.550332 356.957109) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-545"/>
+</g>
+</g>
+</g>
+<g id="xtick_18">
+<g id="line2d_24">
+<g>
+<use xlink:href="#ma2bf66f694" x="354.356423" y="339.300859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_16">
+<!-- 6 -->
+<g transform="translate(350.945563 356.957109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-547" d="M 2019 -63
+C 2969 -63 3588 634 3588 1503
+C 3588 2403 2925 3044 2128 3044
+C 1644 3044 1231 2813 981 2425
+L 944 2425
+C 944 3544 1375 4194 2091 4194
+C 2575 4194 2866 3888 2969 3484
+L 3550 3484
+C 3438 4216 2872 4719 2091 4719
+C 1034 4719 381 3788 381 2150
+C 381 434 1241 -63 2019 -63
+z
+M 2019 459
+C 1447 459 1028 947 1028 1497
+C 1028 2041 1469 2528 2034 2528
+C 2597 2528 3013 2072 3013 1503
+C 3013 922 2578 459 2019 459
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-547"/>
+</g>
+</g>
+</g>
+<g id="xtick_19">
+<g id="line2d_25">
+<g>
+<use xlink:href="#ma2bf66f694" x="396.818685" y="339.300859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_17">
+<!-- 7 -->
+<g transform="translate(393.706029 356.957109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-548" d="M 625 0
+L 1250 0
+L 3316 4103
+L 3316 4656
+L 306 4656
+L 306 4134
+L 2694 4134
+L 2694 4097
+L 625 0
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-548"/>
+</g>
+</g>
+</g>
+<g id="xtick_20">
+<g id="line2d_26">
+<g>
+<use xlink:href="#ma2bf66f694" x="439.280948" y="339.300859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_18">
+<!-- 8 -->
+<g transform="translate(435.878682 356.957109) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-549"/>
+</g>
+</g>
+</g>
+<g id="xtick_21">
+<g id="line2d_27">
+<g>
+<use xlink:href="#ma2bf66f694" x="481.743211" y="339.300859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_19">
+<!-- 9 -->
+<g transform="translate(478.332351 356.957109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-54a" d="M 1884 -63
+C 2938 -63 3588 866 3588 2513
+C 3588 4225 2728 4706 1963 4719
+C 1006 4734 381 4025 381 3156
+C 381 2259 1044 1616 1847 1616
+C 2334 1616 2744 1856 2994 2238
+L 3031 2238
+C 3031 1109 2594 463 1884 463
+C 1394 463 1103 772 1006 1184
+L 419 1184
+C 528 441 1094 -63 1884 -63
+z
+M 1934 2134
+C 1372 2134 963 2588 963 3159
+C 963 3734 1391 4197 1953 4197
+C 2525 4197 2947 3706 2947 3172
+C 2947 2625 2500 2134 1934 2134
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-54a"/>
+</g>
+</g>
+</g>
+<g id="xtick_22">
+<g id="line2d_28">
+<g>
+<use xlink:href="#ma2bf66f694" x="524.205473" y="339.300859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_20">
+<!-- 10 -->
+<g transform="translate(518.498364 356.957109) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-540"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(40.671875 0)"/>
+</g>
+</g>
+</g>
+<g id="text_21">
+<!-- Nombre de faces sur 10 lancers -->
+<g transform="translate(229.55916 374.26668) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-12d" d="M 563 0
+L 1159 0
+L 1159 2656
+C 1159 2881 1138 3347 1113 3944
+C 1475 3297 1653 2984 1866 2650
+L 3553 0
+L 4259 0
+L 4259 4656
+L 3666 4656
+L 3666 1800
+C 3666 1550 3669 1153 3706 703
+C 3494 1125 3281 1481 3156 1678
+L 1263 4656
+L 563 4656
+L 563 0
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-256" d="M 1803 -75
+C 2469 -75 2703 347 2819 541
+L 2881 541
+L 2881 0
+L 3425 0
+L 3425 4656
+L 2863 4656
+L 2863 2934
+L 2819 2934
+C 2703 3119 2488 3538 1806 3538
+C 934 3538 325 2844 325 1738
+C 325 625 931 -75 1803 -75
+z
+M 1888 428
+C 1234 428 897 1009 897 1744
+C 897 2469 1225 3034 1888 3034
+C 2531 3034 2869 2516 2869 1744
+C 2869 966 2522 428 1888 428
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-12d"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(75.34375 0)"/>
+<use xlink:href="#Inter-Regular-300" transform="translate(135.3125 0)"/>
+<use xlink:href="#Inter-Regular-243" transform="translate(222.90625 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(284.140625 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(320.125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(378.421875 0)"/>
+<use xlink:href="#Inter-Regular-256" transform="translate(406.546875 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(467.78125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(526.078125 0)"/>
+<use xlink:href="#Inter-Regular-288" transform="translate(554.203125 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(589.65625 0)"/>
+<use xlink:href="#Inter-Regular-24b" transform="translate(645.8125 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(702.9375 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(761.234375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(814.015625 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(842.140625 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(894.921875 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(954.046875 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(991.6875 0)"/>
+<use xlink:href="#Inter-Regular-540" transform="translate(1019.8125 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(1060.484375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1123.578125 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(1151.703125 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(1175.921875 0)"/>
+<use xlink:href="#Inter-Regular-307" transform="translate(1232.078125 0)"/>
+<use xlink:href="#Inter-Regular-24b" transform="translate(1291.15625 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1348.28125 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(1406.578125 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(1444.21875 0)"/>
+</g>
+</g>
+</g>
+<g id="matplotlib.axis_4">
+<g id="ytick_7">
+<g id="line2d_29">
+<g>
+<use xlink:href="#m8d46084c7c" x="59.66832" y="339.300859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_22">
+<!-- 0.0 -->
+<g transform="translate(36.175195 344.628984) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(86.84375 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_8">
+<g id="line2d_30">
+<g>
+<use xlink:href="#m8d46084c7c" x="59.66832" y="295.903685" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_23">
+<!-- 0.1 -->
+<g transform="translate(39.313633 301.23181) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-540" transform="translate(80.734375 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_9">
+<g id="line2d_31">
+<g>
+<use xlink:href="#m8d46084c7c" x="59.66832" y="252.506511" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_24">
+<!-- 0.2 -->
+<g transform="translate(36.128789 257.834636) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-541" transform="translate(89.375 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_10">
+<g id="line2d_32">
+<g>
+<use xlink:href="#m8d46084c7c" x="59.66832" y="209.109336" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_25">
+<!-- 0.3 -->
+<g transform="translate(36.338477 214.437461) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-543" transform="translate(86.6875 0)"/>
+</g>
+</g>
+</g>
+<g id="text_26">
+<!-- Probabilité -->
+<g transform="translate(29.475469 298.114678) rotate(-90) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-178"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(63.875 0)"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(99.859375 0)"/>
+<use xlink:href="#Inter-Regular-243" transform="translate(159.828125 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(222.046875 0)"/>
+<use xlink:href="#Inter-Regular-243" transform="translate(278.203125 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(339.4375 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(363.65625 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(387.875 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(412.09375 0)"/>
+<use xlink:href="#Inter-Regular-26b" transform="translate(443.84375 0)"/>
+</g>
+</g>
+</g>
+<g id="patch_28">
+<path d="M 59.66832 339.300859
+L 59.66832 201.693027
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+</g>
+<g id="patch_29">
+<path d="M 59.66832 339.300859
+L 564.12 339.300859
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+</g>
+<g id="text_27">
+<!-- aire grise = β = 0,322 -->
+<g style="fill: #718096" transform="translate(108.0753 226.468206) scale(0.1 -0.1)">
+<defs>
+<path id="Inter-Regular-472" d="M 494 -1306
+L 1056 -1306
+L 1056 538
+C 1225 103 1581 -63 2025 -63
+C 2859 -63 3450 516 3450 1338
+C 3450 2022 3034 2372 2456 2516
+C 2947 2656 3253 2966 3253 3488
+C 3253 4209 2694 4719 1888 4719
+C 1063 4719 494 4197 494 3438
+L 494 -1306
+z
+M 1953 463
+C 1372 463 1056 813 1056 1275
+L 1056 3450
+C 1056 3906 1378 4194 1888 4194
+C 2384 4194 2697 3919 2697 3478
+C 2697 3016 2381 2725 1878 2725
+L 1625 2725
+L 1625 2216
+L 2066 2216
+C 2572 2216 2891 1878 2891 1344
+C 2891 803 2528 463 1953 463
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-1fc"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(56.15625 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(80.375 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(116.359375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(174.65625 0)"/>
+<use xlink:href="#Inter-Regular-293" transform="translate(202.78125 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(264.109375 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(303.3125 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(327.53125 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(380.3125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(438.609375 0)"/>
+<use xlink:href="#Inter-Regular-5f2" transform="translate(466.734375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(532.890625 0)"/>
+<use xlink:href="#Inter-Regular-472" transform="translate(561.015625 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(620.59375 0)"/>
+<use xlink:href="#Inter-Regular-5ff" transform="translate(648.71875 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(714.875 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(743 0)"/>
+<use xlink:href="#Inter-Regular-5df" transform="translate(803.5625 0)"/>
+<use xlink:href="#Inter-Regular-543" transform="translate(829.6875 0)"/>
+<use xlink:href="#Inter-Regular-541" transform="translate(891.453125 0)"/>
+<use xlink:href="#Inter-Regular-541" transform="translate(952.4375 0)"/>
+</g>
+</g>
+<g id="text_28">
+<!-- Pièce biaisée (p = 0,8) : le test rate le biais quand le nombre de faces reste sous le seuil -->
+<g transform="translate(94.737754 195.693027) scale(0.105 -0.105)">
+<defs>
+<path id="Inter-Regular-5a9" d="M 300 -578
+L 847 -578
+C 1369 309 1653 1263 1653 2191
+C 1653 3203 1316 4466 847 5234
+L 300 5234
+C 784 4250 1081 3103 1081 2191
+C 1081 1388 853 563 300 -578
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5e4" d="M 922 641
+C 1156 641 1344 828 1344 1063
+C 1344 1297 1156 1484 922 1484
+C 688 1484 500 1297 500 1063
+C 500 828 688 641 922 641
+z
+M 922 3169
+C 1156 3169 1344 3356 1344 3591
+C 1344 3825 1156 4013 922 4013
+C 688 4013 500 3825 500 3591
+C 500 3356 688 3169 922 3169
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-178"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(63.875 0)"/>
+<use xlink:href="#Inter-Regular-26a" transform="translate(88.09375 0)"/>
+<use xlink:href="#Inter-Regular-24b" transform="translate(146.390625 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(203.515625 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(261.8125 0)"/>
+<use xlink:href="#Inter-Regular-243" transform="translate(289.9375 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(351.171875 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(375.390625 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(431.546875 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(455.765625 0)"/>
+<use xlink:href="#Inter-Regular-26b" transform="translate(508.546875 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(566.84375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(625.140625 0)"/>
+<use xlink:href="#Inter-Regular-59f" transform="translate(653.265625 0)"/>
+<use xlink:href="#Inter-Regular-34d" transform="translate(689.734375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(750.96875 0)"/>
+<use xlink:href="#Inter-Regular-5ff" transform="translate(779.09375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(845.25 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(873.375 0)"/>
+<use xlink:href="#Inter-Regular-5df" transform="translate(933.9375 0)"/>
+<use xlink:href="#Inter-Regular-549" transform="translate(960.5 0)"/>
+<use xlink:href="#Inter-Regular-5a9" transform="translate(1022.359375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1058.828125 0)"/>
+<use xlink:href="#Inter-Regular-5e4" transform="translate(1086.953125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1115.765625 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(1143.890625 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1168.109375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1226.40625 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(1254.53125 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1286.28125 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(1344.578125 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(1397.359375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1430.078125 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(1458.203125 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(1495.84375 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(1552 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1583.75 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1642.046875 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(1670.171875 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1694.390625 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1752.6875 0)"/>
+<use xlink:href="#Inter-Regular-243" transform="translate(1780.8125 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(1842.046875 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(1866.265625 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(1922.421875 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(1946.640625 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1999.421875 0)"/>
+<use xlink:href="#Inter-Regular-353" transform="translate(2027.546875 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(2088.78125 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(2147.90625 0)"/>
+<use xlink:href="#Inter-Regular-307" transform="translate(2204.0625 0)"/>
+<use xlink:href="#Inter-Regular-256" transform="translate(2263.140625 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(2324.375 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(2352.5 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(2376.71875 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(2435.015625 0)"/>
+<use xlink:href="#Inter-Regular-307" transform="translate(2463.140625 0)"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(2522.21875 0)"/>
+<use xlink:href="#Inter-Regular-300" transform="translate(2582.1875 0)"/>
+<use xlink:href="#Inter-Regular-243" transform="translate(2669.78125 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(2731.015625 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(2767 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(2825.296875 0)"/>
+<use xlink:href="#Inter-Regular-256" transform="translate(2853.421875 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(2914.65625 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(2972.953125 0)"/>
+<use xlink:href="#Inter-Regular-288" transform="translate(3001.078125 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(3036.53125 0)"/>
+<use xlink:href="#Inter-Regular-24b" transform="translate(3092.6875 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(3149.8125 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(3208.109375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(3260.890625 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(3289.015625 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(3325 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(3383.296875 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(3436.078125 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(3467.828125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(3526.125 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(3554.25 0)"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(3607.03125 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(3667 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(3726.125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(3778.90625 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(3807.03125 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(3831.25 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(3889.546875 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(3917.671875 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(3970.453125 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(4028.75 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(4087.875 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(4112.09375 0)"/>
+</g>
+</g>
+</g>
+</g>
+<defs>
+<clipPath id="pdb1ffe5717">
+<rect x="59.66832" y="28.051875" width="504.45168" height="137.607832"/>
+</clipPath>
+<clipPath id="pbcdfba599b">
+<rect x="59.66832" y="201.693027" width="504.45168" height="137.607832"/>
+</clipPath>
+</defs>
+</svg>
+</div>
+
+*Figure 1 : règle « au moins 8 faces ». En haut, le monde où la pièce est honnête : l'aire rouge est α. En bas, le monde où la pièce est biaisée : l'aire grise est β (le test ne rejette pas alors que $H_0$ est fausse).*
+
+Trois constats se lisent directement dans le tableau :
+
+1. **Un compromis inévitable.** Exiger plus de faces pour accuser la pièce (seuil plus haut) fait baisser α, mais fait monter β. Neyman et Pearson décrivent ce même arbitrage : le niveau est « au choix » de l'investigateur et traduit l'équilibre entre les deux erreurs.[^np1933]
+2. **Aucun seuil ne donne exactement 5 %.** Avec 10 lancers, les valeurs possibles de α sont discrètes (0,172 ; 0,055 ; 0,011…). Pour garantir α ≤ 5 %, il faut prendre $k=9$, avec un α réel de 1,07 %. Le niveau fixé est donc une borne, pas toujours la valeur exacte.
+3. **Avec 10 lancers, une pièce nettement truquée est souvent ratée.** Avec $k=9$, la puissance contre p = 0,8 n'est que de 38 %.
+
+### 1.4 Ce que change la taille d'échantillon
+
+Passer de 10 à 100 lancers : le plus petit seuil garantissant α ≤ 5 % est $k=59$ faces, avec α = 4,4 %. La puissance contre une pièce à p = 0,6 vaut alors 62 %, et contre p = 0,8 elle est pratiquement égale à 100 % *(calculs exacts, annexe)*. Augmenter la taille d'échantillon réduit β sans augmenter α.[^libretexts]
+
+### 1.5 Une idée clé : α est une propriété de la règle, pas d'un résultat
+
+Neyman et Pearson insistent sur ce point : un test ne dit pas, pour un cas particulier, si l'hypothèse est vraie. Il fournit une **règle de conduite** qui, appliquée à long terme, rend rares les rejets erronés d'hypothèses vraies.[^np1933] Dans ce cadre, α est un taux d'erreur à long terme de la procédure, fixé avant les données.[^schneider] Autrement dit : si cette règle était appliquée à une multitude de pièces honnêtes, 1,07 % d'entre elles (pour $k=9$) seraient accusées à tort.
+
+> [!question]- Exercice 1 : calculer α pour une règle plus laxiste
+> Avec 10 lancers et la règle « rejeter si au moins 6 faces », calculer α.
+>
+> **Correction.** $\alpha = \dfrac{\binom{10}{6}+\binom{10}{7}+\binom{10}{8}+\binom{10}{9}+\binom{10}{10}}{1024}=\dfrac{210+120+45+10+1}{1024}=\dfrac{386}{1024}\approx 0{,}377$. Près de quatre pièces honnêtes sur dix seraient accusées à tort : une règle aussi laxiste est inutilisable, alors même qu'elle a une excellente puissance.
+
+> [!tip] À retenir de la leçon 1
+> - Erreur de type I = rejeter $H_0$ alors qu'elle est vraie (α). Erreur de type II = ne pas rejeter alors qu'elle est fausse (β). Puissance = $1-\beta$.
+> - Pour une règle de décision fixée à l'avance, α et β se **calculent**.
+> - Réduire α augmente β (à taille d'échantillon fixée) ; augmenter l'échantillon réduit β.
+
+---
+
+## Leçon 2 : la p-value, ou α lu à l'envers
+
+> [!abstract] Objectif
+> Relier la règle « rejeter si au moins $k$ faces » à la p-value, comprendre pourquoi « rejeter si $p\le\alpha$ » respecte le niveau α, et connaître les lectures fautives les plus fréquentes.
+
+### 2.1 De la règle au résultat observé
+
+Soit un résultat de **9 faces sur 10**. Question : *si la pièce était honnête, quelle serait la probabilité d'un résultat au moins aussi extrême ?*
+
+$$p = P(X\ge 9\mid H_0)=\frac{10+1}{1024}=\frac{11}{1024}\approx 0{,}0107.$$
+
+C'est une **p-value**. L'American Statistical Association la définit ainsi : sous un modèle statistique spécifié, c'est la probabilité d'obtenir un résumé des données (par exemple une différence observée entre deux groupes) au moins aussi extrême que celui observé.[^asa]
+
+**Lien avec la leçon 1.** La règle « rejeter si $p\le 0{,}05$ » revient ici à « rejeter si au moins 9 faces » : 9 faces donne $p=0{,}0107\le 0{,}05$ (rejet), 8 faces donne $p=56/1024=0{,}0547>0{,}05$ (pas de rejet). La p-value est donc une façon de **mesurer à quel point le résultat observé aurait été surprenant sous $H_0$**, et la comparaison avec α reproduit la règle de décision.
+
+### 2.2 Pourquoi « p ≤ α » respecte le niveau α
+
+Lorsque la loi de la statistique de test est connue, la p-value est **uniformément distribuée** sous $H_0$ : elle est la transformée intégrale de probabilité de la statistique.[^wicklin] Conséquence : le seuil 0,05 donne une erreur de type I de 5 % des cas.[^wicklin]
+
+$$P(p\le\alpha\mid H_0)=\alpha .$$
+
+L'expérience suivante le vérifie. *(Simulation réalisée pour ce cours.)* 20 000 tests t à deux échantillons (20 observations par groupe), les deux groupes étant tirés dans la **même** loi normale, donc $H_0$ vraie : $p<0{,}05$ dans **4,85 %** des tests, $p<0{,}01$ dans **0,94 %**, $p<0{,}10$ dans **9,71 %**.
+
+<div style="text-align:center">
+<svg style="max-width:100%;height:auto" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 576 259.2" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<defs>
+<style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+</defs>
+<g id="figure_1">
+<g id="patch_1">
+<path d="M 0 259.2
+L 576 259.2
+L 576 0
+L 0 0
+z
+" style="fill: #ffffff"/>
+</g>
+<g id="axes_1">
+<g id="patch_2">
+<path d="M 61.65957 209.700859
+L 564.12 209.700859
+L 564.12 28.53625
+L 61.65957 28.53625
+z
+" style="fill: #ffffff"/>
+</g>
+<g id="patch_3">
+<path d="M 84.498681 209.700859
+L 107.337791 209.700859
+L 107.337791 88.507983
+L 84.498681 88.507983
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_4">
+<path d="M 107.337791 209.700859
+L 130.176902 209.700859
+L 130.176902 88.258101
+L 107.337791 88.258101
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_5">
+<path d="M 130.176902 209.700859
+L 153.016012 209.700859
+L 153.016012 82.885633
+L 130.176902 82.885633
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_6">
+<path d="M 153.016012 209.700859
+L 175.855123 209.700859
+L 175.855123 83.635279
+L 153.016012 83.635279
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_7">
+<path d="M 175.855123 209.700859
+L 198.694233 209.700859
+L 198.694233 84.634808
+L 175.855123 84.634808
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_8">
+<path d="M 198.694233 209.700859
+L 221.533343 209.700859
+L 221.533343 87.258572
+L 198.694233 87.258572
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_9">
+<path d="M 221.533343 209.700859
+L 244.372454 209.700859
+L 244.372454 83.635279
+L 221.533343 83.635279
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_10">
+<path d="M 244.372454 209.700859
+L 267.211564 209.700859
+L 267.211564 83.760221
+L 244.372454 83.760221
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_11">
+<path d="M 267.211564 209.700859
+L 290.050675 209.700859
+L 290.050675 81.136457
+L 267.211564 81.136457
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_12">
+<path d="M 290.050675 209.700859
+L 312.889785 209.700859
+L 312.889785 83.760221
+L 290.050675 83.760221
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_13">
+<path d="M 312.889785 209.700859
+L 335.728896 209.700859
+L 335.728896 93.88045
+L 312.889785 93.88045
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_14">
+<path d="M 335.728896 209.700859
+L 358.568006 209.700859
+L 358.568006 84.634808
+L 335.728896 84.634808
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_15">
+<path d="M 358.568006 209.700859
+L 381.407116 209.700859
+L 381.407116 81.636222
+L 358.568006 81.636222
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_16">
+<path d="M 381.407116 209.700859
+L 404.246227 209.700859
+L 404.246227 85.259514
+L 381.407116 85.259514
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_17">
+<path d="M 404.246227 209.700859
+L 427.085337 209.700859
+L 427.085337 84.384926
+L 404.246227 84.384926
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_18">
+<path d="M 427.085337 209.700859
+L 449.924448 209.700859
+L 449.924448 90.007276
+L 427.085337 90.007276
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_19">
+<path d="M 449.924448 209.700859
+L 472.763558 209.700859
+L 472.763558 79.387282
+L 449.924448 79.387282
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_20">
+<path d="M 472.763558 209.700859
+L 495.602669 209.700859
+L 495.602669 82.260927
+L 472.763558 82.260927
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_21">
+<path d="M 495.602669 209.700859
+L 518.441779 209.700859
+L 518.441779 77.013401
+L 495.602669 77.013401
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_22">
+<path d="M 518.441779 209.700859
+L 541.28089 209.700859
+L 541.28089 89.257629
+L 518.441779 89.257629
+z
+" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="matplotlib.axis_1">
+<g id="xtick_1">
+<g id="line2d_1">
+<defs>
+<path id="m0697c5a3c1" d="M 0 0
+L 0 3.5
+" style="stroke: #000000; stroke-width: 0.8"/>
+</defs>
+<g>
+<use xlink:href="#m0697c5a3c1" x="84.498681" y="209.700859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_1">
+<!-- 0.0 -->
+<g transform="translate(76.252118 227.357109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-53f" d="M 2019 -63
+C 3059 -63 3656 809 3656 2325
+C 3656 3834 3050 4719 2019 4719
+C 988 4719 381 3834 381 2325
+C 381 806 981 -63 2019 -63
+z
+M 2019 456
+C 1338 456 953 1144 953 2325
+C 953 3509 1338 4203 2019 4203
+C 2700 4203 3084 3513 3084 2325
+C 3084 1144 2700 456 2019 456
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5e0" d="M 922 -41
+C 1156 -41 1344 147 1344 381
+C 1344 616 1156 803 922 803
+C 688 803 500 616 500 381
+C 500 147 688 -41 922 -41
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(86.84375 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_2">
+<g id="line2d_2">
+<g>
+<use xlink:href="#m0697c5a3c1" x="175.855123" y="209.700859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_2">
+<!-- 0.2 -->
+<g transform="translate(167.585357 227.357109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-541" d="M 481 0
+L 3447 0
+L 3447 522
+L 1300 522
+L 1300 559
+L 2319 1644
+C 3141 2519 3369 2916 3369 3419
+C 3369 4147 2778 4719 1947 4719
+C 1119 4719 494 4159 494 3334
+L 1063 3334
+C 1063 3859 1400 4203 1931 4203
+C 2428 4203 2806 3900 2806 3413
+C 2806 2984 2544 2666 2028 2106
+L 481 428
+L 481 0
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-541" transform="translate(89.375 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_3">
+<g id="line2d_3">
+<g>
+<use xlink:href="#m0697c5a3c1" x="267.211564" y="209.700859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_3">
+<!-- 0.4 -->
+<g transform="translate(258.743283 227.357109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-544" d="M 375 947
+L 2566 947
+L 2566 0
+L 3134 0
+L 3134 947
+L 3766 947
+L 3766 1469
+L 3134 1469
+L 3134 4656
+L 2413 4656
+L 375 1431
+L 375 947
+z
+M 2569 1469
+L 1009 1469
+L 1009 1506
+L 2531 3913
+L 2569 3913
+L 2569 1469
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-544" transform="translate(89.375 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_4">
+<g id="line2d_4">
+<g>
+<use xlink:href="#m0697c5a3c1" x="358.568006" y="209.700859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_4">
+<!-- 0.6 -->
+<g transform="translate(350.38074 227.357109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-547" d="M 2019 -63
+C 2969 -63 3588 634 3588 1503
+C 3588 2403 2925 3044 2128 3044
+C 1644 3044 1231 2813 981 2425
+L 944 2425
+C 944 3544 1375 4194 2091 4194
+C 2575 4194 2866 3888 2969 3484
+L 3550 3484
+C 3438 4216 2872 4719 2091 4719
+C 1034 4719 381 3788 381 2150
+C 381 434 1241 -63 2019 -63
+z
+M 2019 459
+C 1447 459 1028 947 1028 1497
+C 1028 2041 1469 2528 2034 2528
+C 2597 2528 3013 2072 3013 1503
+C 3013 922 2578 459 2019 459
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-547" transform="translate(86.84375 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_5">
+<g id="line2d_5">
+<g>
+<use xlink:href="#m0697c5a3c1" x="449.924448" y="209.700859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_5">
+<!-- 0.8 -->
+<g transform="translate(441.730307 227.357109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-549" d="M 1978 -63
+C 2916 -63 3578 478 3578 1238
+C 3578 1825 3175 2325 2669 2419
+L 2669 2444
+C 3109 2559 3403 2988 3403 3481
+C 3403 4191 2794 4719 1978 4719
+C 1150 4719 550 4191 550 3481
+C 550 2988 838 2559 1291 2444
+L 1291 2419
+C 769 2325 381 1825 381 1238
+C 381 478 1031 -63 1978 -63
+z
+M 1978 453
+C 1350 453 966 775 966 1269
+C 966 1784 1391 2153 1978 2153
+C 2553 2153 2984 1784 2984 1269
+C 2984 775 2594 453 1978 453
+z
+M 1978 2650
+C 1475 2650 1125 2966 1125 3438
+C 1125 3903 1463 4206 1978 4206
+C 2484 4206 2828 3903 2828 3438
+C 2828 2966 2469 2650 1978 2650
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-549" transform="translate(87.125 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_6">
+<g id="line2d_6">
+<g>
+<use xlink:href="#m0697c5a3c1" x="541.28089" y="209.700859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_6">
+<!-- 1.0 -->
+<g transform="translate(534.128311 227.357109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-540" d="M 2041 4656
+L 1313 4656
+L 300 3909
+L 300 3272
+L 1425 4106
+L 1456 4106
+L 1456 0
+L 2041 0
+L 2041 4656
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-540"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(40.671875 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(66.953125 0)"/>
+</g>
+</g>
+</g>
+<g id="text_7">
+<!-- p-value -->
+<g transform="translate(293.048535 244.66668) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-34d" d="M 494 -1306
+L 1056 -1306
+L 1056 541
+L 1100 541
+C 1216 347 1450 -75 2116 -75
+C 2988 -75 3594 625 3594 1738
+C 3594 2844 2984 3538 2113 3538
+C 1431 3538 1216 3119 1100 2934
+L 1038 2934
+L 1038 3494
+L 494 3494
+L 494 -1306
+z
+M 2031 428
+C 1397 428 1050 966 1050 1744
+C 1050 2516 1388 3034 2031 3034
+C 2694 3034 3022 2469 3022 1744
+C 3022 1009 2684 428 2031 428
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5b5" d="M 2494 2247
+L 450 2247
+L 450 1728
+L 2494 1728
+L 2494 2247
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-3d6" d="M 1503 0
+L 2094 0
+L 3428 3494
+L 2813 3494
+L 2069 1422
+C 1959 1119 1878 813 1800 522
+C 1719 813 1638 1119 1528 1422
+L 784 3494
+L 169 3494
+L 1503 0
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-1fc" d="M 1472 -81
+C 2063 -81 2391 228 2509 475
+L 2547 475
+L 2547 0
+L 3100 0
+L 3100 2303
+C 3100 3394 2259 3538 1791 3538
+C 1250 3538 650 3344 381 2709
+L 922 2531
+C 1031 2775 1303 3044 1806 3044
+C 2291 3044 2538 2794 2538 2359
+L 2538 2341
+C 2538 2081 2263 2100 1641 2022
+C 994 1941 281 1794 281 994
+C 281 306 809 -81 1472 -81
+z
+M 1569 416
+C 1150 416 847 603 847 966
+C 847 1363 1206 1494 1616 1547
+C 1831 1575 2444 1638 2538 1747
+L 2538 1263
+C 2538 834 2191 416 1569 416
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-2e2" d="M 1056 4656
+L 494 4656
+L 494 0
+L 1056 0
+L 1056 4656
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-395" d="M 1678 -44
+C 2138 -44 2519 144 2747 653
+L 2747 0
+L 3291 0
+L 3291 3494
+L 2725 3494
+L 2725 1400
+C 2725 803 2347 463 1847 463
+C 1359 463 1056 784 1056 1322
+L 1056 3494
+L 494 3494
+L 494 1275
+C 494 391 972 -44 1678 -44
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-267" d="M 1963 -75
+C 2678 -75 3200 284 3363 813
+L 2819 963
+C 2688 606 2378 425 1966 425
+C 1347 425 922 825 894 1556
+L 3419 1556
+L 3419 1791
+C 3419 3081 2638 3538 1897 3538
+C 944 3538 325 2791 325 1719
+C 325 644 950 -75 1963 -75
+z
+M 897 2031
+C 931 2566 1297 3038 1897 3038
+C 2472 3038 2794 2625 2847 2031
+L 897 2031
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-34d"/>
+<use xlink:href="#Inter-Regular-5b5" transform="translate(61.234375 0)"/>
+<use xlink:href="#Inter-Regular-3d6" transform="translate(107.234375 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(162.953125 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(219.109375 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(243.328125 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(302.453125 0)"/>
+</g>
+</g>
+</g>
+<g id="matplotlib.axis_2">
+<g id="ytick_1">
+<g id="line2d_7">
+<defs>
+<path id="md481c8082f" d="M 0 0
+L -3.5 0
+" style="stroke: #000000; stroke-width: 0.8"/>
+</defs>
+<g>
+<use xlink:href="#md481c8082f" x="61.65957" y="209.700859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_8">
+<!-- 0 -->
+<g transform="translate(47.719258 215.028984) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+</g>
+</g>
+</g>
+<g id="ytick_2">
+<g id="line2d_8">
+<g>
+<use xlink:href="#md481c8082f" x="61.65957" y="184.712637" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_9">
+<!-- 200 -->
+<g transform="translate(34.070664 190.040762) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-541"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(60.984375 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(124.078125 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_3">
+<g id="line2d_9">
+<g>
+<use xlink:href="#md481c8082f" x="61.65957" y="159.724415" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_10">
+<!-- 400 -->
+<g transform="translate(33.673633 165.05254) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-544"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(64.59375 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(127.6875 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_4">
+<g id="line2d_10">
+<g>
+<use xlink:href="#md481c8082f" x="61.65957" y="134.736193" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_11">
+<!-- 600 -->
+<g transform="translate(33.957227 140.064318) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-547"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(62.015625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(125.109375 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_5">
+<g id="line2d_11">
+<g>
+<use xlink:href="#md481c8082f" x="61.65957" y="109.747971" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_12">
+<!-- 800 -->
+<g transform="translate(33.974414 115.076096) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-549"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(61.859375 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(124.953125 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_6">
+<g id="line2d_12">
+<g>
+<use xlink:href="#md481c8082f" x="61.65957" y="84.759749" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_13">
+<!-- 1000 -->
+<g transform="translate(29.364727 90.087874) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-540"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(40.671875 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(103.765625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(166.859375 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_7">
+<g id="line2d_13">
+<g>
+<use xlink:href="#md481c8082f" x="61.65957" y="59.771527" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_14">
+<!-- 1200 -->
+<g transform="translate(29.596758 65.099652) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-540"/>
+<use xlink:href="#Inter-Regular-541" transform="translate(40.671875 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(101.65625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(164.75 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_8">
+<g id="line2d_14">
+<g>
+<use xlink:href="#md481c8082f" x="61.65957" y="34.783305" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_15">
+<!-- 1400 -->
+<g transform="translate(29.199727 40.11143) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-540"/>
+<use xlink:href="#Inter-Regular-544" transform="translate(40.671875 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(105.265625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(168.359375 0)"/>
+</g>
+</g>
+</g>
+<g id="text_16">
+<!-- Nombre de tests (sur 20 000) -->
+<g transform="translate(22.546406 196.216523) rotate(-90) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-12d" d="M 563 0
+L 1159 0
+L 1159 2656
+C 1159 2881 1138 3347 1113 3944
+C 1475 3297 1653 2984 1866 2650
+L 3553 0
+L 4259 0
+L 4259 4656
+L 3666 4656
+L 3666 1800
+C 3666 1550 3669 1153 3706 703
+C 3494 1125 3281 1481 3156 1678
+L 1263 4656
+L 563 4656
+L 563 0
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-318" d="M 1916 -75
+C 2869 -75 3513 647 3513 1725
+C 3513 2819 2869 3538 1916 3538
+C 966 3538 325 2819 325 1725
+C 325 647 966 -75 1916 -75
+z
+M 1916 428
+C 1219 428 897 1038 897 1725
+C 897 2422 1219 3034 1916 3034
+C 2622 3034 2944 2419 2944 1725
+C 2944 1038 2622 428 1916 428
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-300" d="M 494 0
+L 1056 0
+L 1056 2200
+C 1056 2756 1428 3044 1838 3044
+C 2231 3044 2522 2784 2522 2397
+L 2522 0
+L 3084 0
+L 3084 2281
+C 3084 2722 3372 3044 3844 3044
+C 4219 3044 4547 2844 4547 2341
+L 4547 0
+L 5113 0
+L 5113 2356
+C 5113 3166 4619 3556 4013 3556
+C 3506 3556 3078 3284 2913 2844
+C 2788 3275 2481 3556 2022 3556
+C 1609 3556 1216 3325 1044 2853
+L 1041 3494
+L 494 3494
+L 494 0
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-243" d="M 2116 -75
+C 2988 -75 3594 625 3594 1738
+C 3594 2844 2984 3538 2113 3538
+C 1431 3538 1216 3119 1100 2934
+L 1056 2934
+L 1056 4656
+L 494 4656
+L 494 0
+L 1038 0
+L 1038 541
+L 1100 541
+C 1216 347 1450 -75 2116 -75
+z
+M 2031 428
+C 1397 428 1050 966 1050 1744
+C 1050 2516 1388 3034 2031 3034
+C 2694 3034 3022 2469 3022 1744
+C 3022 1009 2684 428 2031 428
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-356" d="M 494 0
+L 1056 0
+L 1056 2188
+C 1056 2659 1425 3000 1928 3000
+C 2078 3000 2231 2975 2266 2969
+L 2266 3534
+C 2200 3538 2063 3544 1981 3544
+C 1566 3544 1203 3309 1075 2956
+L 1038 2956
+L 1038 3494
+L 494 3494
+L 494 0
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-6eb" transform="scale(0.015625)"/>
+<path id="Inter-Regular-256" d="M 1803 -75
+C 2469 -75 2703 347 2819 541
+L 2881 541
+L 2881 0
+L 3425 0
+L 3425 4656
+L 2863 4656
+L 2863 2934
+L 2819 2934
+C 2703 3119 2488 3538 1806 3538
+C 934 3538 325 2844 325 1738
+C 325 625 931 -75 1803 -75
+z
+M 1888 428
+C 1234 428 897 1009 897 1744
+C 897 2469 1225 3034 1888 3034
+C 2531 3034 2869 2516 2869 1744
+C 2869 966 2522 428 1888 428
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-37b" d="M 1869 3494
+L 1150 3494
+L 1150 4325
+L 588 4325
+L 588 3494
+L 63 3494
+L 63 3013
+L 588 3013
+L 588 863
+C 588 291 944 -44 1547 -44
+C 1691 -44 1850 -22 1966 19
+L 1850 494
+C 1756 475 1634 456 1563 456
+C 1266 456 1150 594 1150 906
+L 1150 3013
+L 1869 3013
+L 1869 3494
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-369" d="M 1681 -75
+C 2500 -75 3059 372 3059 984
+C 3059 1463 2763 1778 2128 1928
+L 1600 2053
+C 1191 2150 1013 2294 1013 2553
+C 1013 2844 1325 3059 1741 3059
+C 2191 3059 2388 2816 2484 2566
+L 2994 2697
+C 2834 3188 2456 3538 1738 3538
+C 994 3538 444 3119 444 2519
+C 444 2028 747 1716 1381 1566
+L 1963 1428
+C 2306 1347 2475 1188 2475 947
+C 2475 659 2163 419 1675 419
+C 1256 419 972 591 872 975
+L 338 847
+C 463 244 963 -75 1681 -75
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-59f" d="M 681 1897
+C 681 984 956 31 1488 -872
+L 2034 -872
+C 1497 238 1253 1069 1253 1897
+C 1253 2809 1550 3956 2034 4941
+L 1488 4941
+C 1019 4169 681 2913 681 1897
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5a9" d="M 300 -578
+L 847 -578
+C 1369 309 1653 1263 1653 2191
+C 1653 3203 1316 4466 847 5234
+L 300 5234
+C 784 4250 1081 3103 1081 2191
+C 1081 1388 853 563 300 -578
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-12d"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(75.34375 0)"/>
+<use xlink:href="#Inter-Regular-300" transform="translate(135.3125 0)"/>
+<use xlink:href="#Inter-Regular-243" transform="translate(222.90625 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(284.140625 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(320.125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(378.421875 0)"/>
+<use xlink:href="#Inter-Regular-256" transform="translate(406.546875 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(467.78125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(526.078125 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(554.203125 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(585.953125 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(644.25 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(697.03125 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(728.78125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(781.5625 0)"/>
+<use xlink:href="#Inter-Regular-59f" transform="translate(809.6875 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(846.15625 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(898.9375 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(958.0625 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(995.703125 0)"/>
+<use xlink:href="#Inter-Regular-541" transform="translate(1023.828125 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(1084.8125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1147.90625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(1176.03125 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(1239.125 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(1302.21875 0)"/>
+<use xlink:href="#Inter-Regular-5a9" transform="translate(1365.3125 0)"/>
+</g>
+</g>
+</g>
+<g id="line2d_15">
+<path d="M 61.65957 84.759749
+L 564.12 84.759749
+" clip-path="url(#p322bdd93f4)" style="fill: none; stroke-dasharray: 3.7,1.6; stroke-dashoffset: 0; stroke: #718096"/>
+</g>
+<g id="patch_23">
+<path d="M 61.65957 209.700859
+L 61.65957 28.53625
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+</g>
+<g id="patch_24">
+<path d="M 61.65957 209.700859
+L 564.12 209.700859
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+</g>
+<g id="text_17">
+<!-- barre rouge : p &lt; 0,05, soit 4,9 % des tests -->
+<g transform="translate(121.041257 57.272705) scale(0.095 -0.095)">
+<defs>
+<path id="Inter-Regular-293" d="M 1909 -1381
+C 2759 -1381 3431 -994 3431 -91
+L 3431 3494
+L 2884 3494
+L 2884 2934
+L 2831 2934
+C 2713 3122 2488 3538 1813 3538
+C 941 3538 325 2844 325 1763
+C 325 666 963 56 1800 56
+C 2475 56 2697 441 2816 641
+L 2869 641
+L 2869 -59
+C 2869 -634 2466 -891 1909 -891
+C 1294 -891 1075 -578 928 -375
+L 472 -669
+C 688 -1053 1134 -1381 1909 -1381
+z
+M 1894 556
+C 1238 556 897 1056 897 1775
+C 897 2472 1228 3034 1894 3034
+C 2538 3034 2875 2516 2875 1775
+C 2875 1013 2528 556 1894 556
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5e3" d="M 922 -41
+C 1156 -41 1344 147 1344 381
+C 1344 616 1156 803 922 803
+C 688 803 500 616 500 381
+C 500 147 688 -41 922 -41
+z
+M 922 2488
+C 1156 2488 1344 2675 1344 2909
+C 1344 3144 1156 3331 922 3331
+C 688 3331 500 3144 500 2909
+C 500 2675 688 2488 922 2488
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5fb" d="M 544 2134
+L 3494 647
+L 3494 1253
+L 1269 2309
+L 1269 2347
+L 3494 3403
+L 3494 4016
+L 544 2528
+L 544 2134
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5df" d="M 400 -1122
+L 831 -1122
+L 1319 650
+L 675 650
+L 400 -1122
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-545" d="M 1956 -63
+C 2853 -63 3509 594 3509 1488
+C 3509 2388 2881 3047 2028 3047
+C 1706 3047 1397 2934 1206 2775
+L 1181 2775
+L 1341 4134
+L 3291 4134
+L 3291 4656
+L 841 4656
+L 566 2350
+L 1122 2281
+C 1306 2422 1631 2525 1919 2525
+C 2503 2525 2928 2078 2928 1478
+C 2928 888 2519 459 1956 459
+C 1488 459 1106 759 1069 1175
+L 494 1175
+C 525 463 1138 -63 1956 -63
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-2b2" d="M 494 0
+L 1056 0
+L 1056 3494
+L 494 3494
+L 494 0
+z
+M 778 4066
+C 994 4066 1172 4231 1172 4438
+C 1172 4644 994 4809 778 4809
+C 566 4809 388 4644 388 4438
+C 388 4231 566 4066 778 4066
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-54a" d="M 1884 -63
+C 2938 -63 3588 866 3588 2513
+C 3588 4225 2728 4706 1963 4719
+C 1006 4734 381 4025 381 3156
+C 381 2259 1044 1616 1847 1616
+C 2334 1616 2744 1856 2994 2238
+L 3031 2238
+C 3031 1109 2594 463 1884 463
+C 1394 463 1103 772 1006 1184
+L 419 1184
+C 528 441 1094 -63 1884 -63
+z
+M 1934 2134
+C 1372 2134 963 2588 963 3159
+C 963 3734 1391 4197 1953 4197
+C 2525 4197 2947 3706 2947 3172
+C 2947 2625 2500 2134 1934 2134
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-6ca" d="M 4656 -91
+C 5247 -91 5566 344 5566 856
+L 5566 1100
+C 5566 1609 5256 2044 4656 2044
+C 4069 2044 3741 1613 3741 1100
+L 3741 856
+C 3741 344 4059 -91 4656 -91
+z
+M 1634 2597
+C 2225 2597 2544 3031 2544 3544
+L 2544 3788
+C 2544 4297 2234 4731 1634 4731
+C 1047 4731 719 4300 719 3788
+L 719 3544
+C 719 3031 1038 2597 1634 2597
+z
+M 1263 0
+L 1791 0
+L 4991 4656
+L 4463 4656
+L 1263 0
+z
+M 4656 319
+C 4334 319 4219 578 4219 856
+L 4219 1100
+C 4219 1375 4344 1638 4656 1638
+C 4981 1638 5088 1375 5088 1100
+L 5088 856
+C 5088 578 4972 319 4656 319
+z
+M 1634 3006
+C 1313 3006 1197 3266 1197 3544
+L 1197 3788
+C 1197 4063 1322 4325 1634 4325
+C 1959 4325 2066 4063 2066 3788
+L 2066 3544
+C 2066 3266 1950 3006 1634 3006
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-243"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(62.21875 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(118.375 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(157.578125 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(193.5625 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(251.859375 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(279.984375 0)"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(315.96875 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(375.9375 0)"/>
+<use xlink:href="#Inter-Regular-293" transform="translate(435.0625 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(496.390625 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(554.6875 0)"/>
+<use xlink:href="#Inter-Regular-5e3" transform="translate(582.8125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(611.625 0)"/>
+<use xlink:href="#Inter-Regular-34d" transform="translate(639.75 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(700.984375 0)"/>
+<use xlink:href="#Inter-Regular-5fb" transform="translate(729.109375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(795.265625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(823.390625 0)"/>
+<use xlink:href="#Inter-Regular-5df" transform="translate(883.953125 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(910.234375 0)"/>
+<use xlink:href="#Inter-Regular-545" transform="translate(973.328125 0)"/>
+<use xlink:href="#Inter-Regular-5df" transform="translate(1031.4375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1060.25 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(1088.375 0)"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(1141.15625 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(1201.125 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(1225.34375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1258.0625 0)"/>
+<use xlink:href="#Inter-Regular-544" transform="translate(1286.1875 0)"/>
+<use xlink:href="#Inter-Regular-5df" transform="translate(1347.40625 0)"/>
+<use xlink:href="#Inter-Regular-54a" transform="translate(1375.53125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1437.546875 0)"/>
+<use xlink:href="#Inter-Regular-6ca" transform="translate(1465.671875 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1563.859375 0)"/>
+<use xlink:href="#Inter-Regular-256" transform="translate(1591.984375 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1653.21875 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(1711.515625 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1764.296875 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(1792.421875 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1824.171875 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(1882.46875 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(1935.25 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(1967 0)"/>
+</g>
+</g>
+<g id="text_18">
+<!-- 20 000 tests où $H_0$ est vraie : la p-value est uniforme sur [0, 1] -->
+<g transform="translate(150.804785 22.53625) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-39b" d="M 1678 -44
+C 2138 -44 2519 144 2747 653
+L 2747 0
+L 3291 0
+L 3291 3494
+L 2725 3494
+L 2725 1400
+C 2725 803 2347 463 1847 463
+C 1359 463 1056 784 1056 1322
+L 1056 3494
+L 494 3494
+L 494 1275
+C 494 391 972 -44 1678 -44
+z
+M 1669 3950
+L 2131 3950
+L 1694 4869
+L 1066 4869
+L 1669 3950
+z
+" transform="scale(0.015625)"/>
+<path id="DejaVuSans-Oblique-2b" d="M 1081 4666
+L 1716 4666
+L 1344 2753
+L 3634 2753
+L 4006 4666
+L 4641 4666
+L 3731 0
+L 3097 0
+L 3531 2222
+L 1241 2222
+L 806 0
+L 172 0
+L 1081 4666
+z
+" transform="scale(0.015625)"/>
+<path id="DejaVuSans-13" d="M 2034 4250
+Q 1547 4250 1301 3770
+Q 1056 3291 1056 2328
+Q 1056 1369 1301 889
+Q 1547 409 2034 409
+Q 2525 409 2770 889
+Q 3016 1369 3016 2328
+Q 3016 3291 2770 3770
+Q 2525 4250 2034 4250
+z
+M 2034 4750
+Q 2819 4750 3233 4129
+Q 3647 3509 3647 2328
+Q 3647 1150 3233 529
+Q 2819 -91 2034 -91
+Q 1250 -91 836 529
+Q 422 1150 422 2328
+Q 422 3509 836 4129
+Q 1250 4750 2034 4750
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-307" d="M 1056 2094
+C 1056 2691 1434 3031 1938 3031
+C 2425 3031 2725 2709 2725 2172
+L 2725 0
+L 3288 0
+L 3288 2219
+C 3288 3103 2813 3538 2106 3538
+C 1638 3538 1263 3341 1038 2847
+L 1034 3494
+L 494 3494
+L 494 0
+L 1056 0
+L 1056 2094
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-288" d="M 2119 3494
+L 1313 3494
+L 1313 3834
+C 1313 4172 1463 4353 1809 4353
+C 1966 4353 2053 4319 2113 4300
+L 2269 4781
+C 2184 4819 2009 4875 1744 4875
+C 1234 4875 750 4566 750 3959
+L 750 3494
+L 63 3494
+L 63 3013
+L 750 3013
+L 750 0
+L 1313 0
+L 1313 3013
+L 2119 3013
+L 2119 3494
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5a1" d="M 706 -872
+L 1950 -872
+L 1950 -394
+L 1244 -394
+L 1244 4463
+L 1950 4463
+L 1950 4941
+L 706 4941
+L 706 -872
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5a3" d="M 384 -872
+L 1628 -872
+L 1628 4941
+L 384 4941
+L 384 4463
+L 1091 4463
+L 1091 -394
+L 384 -394
+L 384 -872
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-541" transform="translate(0 0.796875)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(60.986328 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(124.072266 0.796875)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(152.197266 0.796875)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(215.283203 0.796875)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(278.369141 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(341.455078 0.796875)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(369.580078 0.796875)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(402.294922 0.796875)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(460.595703 0.796875)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(513.378906 0.796875)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(546.09375 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(598.876953 0.796875)"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(627.001953 0.796875)"/>
+<use xlink:href="#Inter-Regular-39b" transform="translate(686.962891 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(746.09375 0.796875)"/>
+<use xlink:href="#DejaVuSans-Oblique-2b" transform="translate(774.21875 0.796875)"/>
+<use xlink:href="#DejaVuSans-13" transform="translate(849.414062 -14.203076) scale(0.7)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(896.68457 0.796875)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(924.80957 0.796875)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(983.110352 0.796875)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(1035.893555 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1068.608398 0.796875)"/>
+<use xlink:href="#Inter-Regular-3d6" transform="translate(1096.733398 0.796875)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(1152.93457 0.796875)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(1190.581055 0.796875)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(1246.733398 0.796875)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1270.952148 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1329.25293 0.796875)"/>
+<use xlink:href="#Inter-Regular-5e3" transform="translate(1357.37793 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1386.186523 0.796875)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(1414.311523 0.796875)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(1438.530273 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1494.682617 0.796875)"/>
+<use xlink:href="#Inter-Regular-34d" transform="translate(1522.807617 0.796875)"/>
+<use xlink:href="#Inter-Regular-5b5" transform="translate(1584.038086 0.796875)"/>
+<use xlink:href="#Inter-Regular-3d6" transform="translate(1630.03418 0.796875)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(1686.235352 0.796875)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(1742.387695 0.796875)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(1766.606445 0.796875)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1825.737305 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1884.038086 0.796875)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1912.163086 0.796875)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(1970.463867 0.796875)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(2023.24707 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(2055.961914 0.796875)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(2084.086914 0.796875)"/>
+<use xlink:href="#Inter-Regular-307" transform="translate(2143.217773 0.796875)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(2202.299805 0.796875)"/>
+<use xlink:href="#Inter-Regular-288" transform="translate(2226.518555 0.796875)"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(2263.530273 0.796875)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(2323.491211 0.796875)"/>
+<use xlink:href="#Inter-Regular-300" transform="translate(2361.137695 0.796875)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(2448.735352 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(2507.036133 0.796875)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(2535.161133 0.796875)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(2587.944336 0.796875)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(2647.075195 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(2684.72168 0.796875)"/>
+<use xlink:href="#Inter-Regular-5a1" transform="translate(2712.84668 0.796875)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(2749.321289 0.796875)"/>
+<use xlink:href="#Inter-Regular-5df" transform="translate(2812.407227 0.796875)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(2841.21582 0.796875)"/>
+<use xlink:href="#Inter-Regular-540" transform="translate(2869.34082 0.796875)"/>
+<use xlink:href="#Inter-Regular-5a3" transform="translate(2910.014648 0.796875)"/>
+</g>
+</g>
+</g>
+</g>
+<defs>
+<clipPath id="p322bdd93f4">
+<rect x="61.65957" y="28.53625" width="502.46043" height="181.164609"/>
+</clipPath>
+</defs>
+</svg>
+</div>
+
+*Figure 2 : sous $H_0$, les p-values se répartissent de façon uniforme sur [0, 1]. La barre rouge (p < 0,05) contient environ 5 % des tests.*
+
+Avec la pièce, la statistique (nombre de faces) est discrète : les p-values possibles sont en nombre fini, ce qui explique que le taux réel de la leçon 1 (1,07 %) puisse être inférieur au niveau visé (5 %).
+
+> [!warning] Une condition à ne pas perdre de vue
+> L'uniformité de la p-value sous $H_0$ suppose un test **correctement construit** : hypothèse fixée à l'avance, loi de la statistique connue. Les leçons 4 à 6 examinent trois façons de violer cette condition.
+
+### 2.3 Ce que la p-value n'est pas
+
+Les six principes de l'ASA sont résumés ci-dessous pour les lectures les plus répandues.[^asa]
+
+| Énoncé fautif | Pourquoi il est faux |
+|---|---|
+| « $p=0{,}0107$ : il y a 1,07 % de chances que la pièce soit honnête » | La p-value est calculée **en supposant** $H_0$ vraie ; elle ne mesure pas la probabilité d'une hypothèse ni celle que le hasard seul ait produit les données[^asa][^schneider] |
+| « $p>0{,}05$ : la pièce est honnête » | Un résultat non significatif suspend le jugement ; il ne démontre pas $H_0$[^schneider][^asa] |
+| « $p<0{,}05$ : l'effet est important » | La p-value ne mesure ni la taille ni l'importance d'un effet[^asa] |
+| « $p$ est la probabilité que ce résultat soit une erreur » | α décrit la règle à long terme ; la p-value ne donne pas la probabilité d'erreur de ce résultat-ci[^np1933][^asa] |
+
+> [!info] Deux traditions mélangées (pour comprendre les confusions)
+> Chez **Fisher**, la p-value est calculée après les données, pour une seule hypothèse nulle, comme indice contre $H_0$. Chez **Neyman–Pearson**, deux hypothèses sont opposées, α est fixé à l'avance, et la décision se prend en comparant la statistique à une valeur critique, sans p-value. Les manuels ont fusionné les deux à partir des années 1940, d'où de nombreuses lectures hybrides (par exemple lire la p-value à la fois comme taux d'erreur et comme preuve).[^schneider]
+
+> [!question]- Exercice 2 : décider à partir d'une p-value
+> Sur 10 lancers, 7 faces sont obtenues. Calculer la p-value (unilatérale) et conclure au niveau 5 %.
+>
+> **Correction.** $p=P(X\ge 7\mid H_0)=\dfrac{120+45+10+1}{1024}=\dfrac{176}{1024}\approx 0{,}172$. Comme $p>0{,}05$, $H_0$ n'est pas rejetée. Cela ne prouve pas que la pièce est honnête : avec 10 lancers, la puissance est faible (leçon 1), un biais modéré peut très bien passer inaperçu.
+
+> [!tip] À retenir de la leçon 2
+> - La p-value est la probabilité, sous $H_0$, d'un résultat au moins aussi extrême que celui observé.
+> - Sous $H_0$ et avec un test bien construit, elle est uniforme : « rejeter si $p\le\alpha$ » donne un taux d'erreur α.
+> - Elle ne mesure ni la probabilité que $H_0$ soit vraie, ni l'importance de l'effet.
+
+---
+
+## Leçon 3 : de la pièce à deux groupes de cellules
+
+> [!abstract] Objectif
+> Transposer le raisonnement au cas du single-cell, et dresser la liste des **conditions** sous lesquelles « α = taux d'erreur » est une garantie. Chacune des trois leçons suivantes viole l'une de ces conditions.
+
+### 3.1 Même logique, autre décor
+
+Dans les données de single-cell (cf. [[cours-scrnaseq-inference-selective]]), chaque cellule a une mesure d'expression pour chaque gène. Pour **un gène**, la question « ce gène est-il plus exprimé dans le groupe A que dans le groupe B ? » se traite comme la pièce :
+
+- $H_0$ : le niveau moyen d'expression est le même dans les deux groupes ;
+- statistique de test : un écart de moyennes normalisé (test t) ;
+- règle : rejeter si la p-value est inférieure ou égale à α.
+
+La statistique est ici continue, donc plus de seuil discret : la figure 3 est la version continue de la figure 1.
 
 <div style="text-align:center">
 <svg style="max-width:100%;height:auto" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 576 273.6" xmlns="http://www.w3.org/2000/svg" version="1.1">
@@ -3267,1375 +6399,90 @@ z
 </svg>
 </div>
 
-*Figure 1 : schéma pédagogique (statistique de test gaussienne, alternative décalée de 2,5 écarts-types, seuil unilatéral à 5 %). Aire rouge = $\alpha$ = 5 %. Aire grise = $\beta$ ≈ 19,6 %, soit une puissance d'environ 80,4 %. Le décalage de 2,5 est un choix arbitraire de dessin (calcul : voir annexe).*
+*Figure 3 : schéma pédagogique (statistique gaussienne, alternative décalée de 2,5 écarts-types, test unilatéral à 5 %). Aire rouge : α = 5 %. Aire grise : β ≈ 19,6 % (puissance ≈ 80,4 %). Le décalage de 2,5 est un choix arbitraire de dessin.*
 
-### 1.3 Deux erreurs à équilibrer
+### 3.2 Les conditions de la garantie
 
-Neyman et Pearson indiquent que la première erreur est facile à contrôler en choisissant un niveau $\varepsilon$ petit, tandis que la seconde est minimisée par le choix de la meilleure région critique.[^np1933] Le niveau est « au choix » de l'investigateur et traduit l'arbitrage entre les deux erreurs.[^np1933] Sur la figure 1, le déplacement du seuil vers la droite fait diminuer l'aire rouge et augmenter l'aire grise (lecture du schéma).
+Le taux d'erreur α est garanti lorsque **quatre conditions** sont réunies :
 
-### 1.4 Un test est une règle de comportement à long terme
+| # | Condition | Quand elle est violée | Leçon |
+|---|---|---|---|
+| C1 | **Un seul test** (ou une famille de taille 1) | Des milliers de gènes testés | 4 |
+| C2 | **Observations indépendantes** | Cellules d'un même individu | 5 |
+| C3 | **Hypothèse fixée avant de voir les données** | Groupes obtenus par clustering des mêmes données | 6 |
+| C4 | **Loi de la statistique connue sous $H_0$** | Modèle mal spécifié | hors périmètre |
 
-Neyman et Pearson précisent qu'un test ne dit pas, dans un cas particulier, si l'hypothèse est vraie ou fausse. Il fournit une règle de conduite qui, appliquée à long terme, rend rares les rejets erronés d'hypothèses vraies.[^np1933] Dans cette lecture, $\alpha$ est un **taux d'erreur à long terme** de la procédure, fixé à l'avance.[^schneider] Un seuil de 5 % ne signifie donc pas « 5 % de chances que ce résultat précis soit faux » (voir section 6).
-
-> [!tip] À retenir de la section 1
-> - Erreur de type I = faux positif ; probabilité $\alpha$, choisie à l'avance.
-> - Erreur de type II = faux négatif ; probabilité $\beta$ ; puissance $= 1-\beta$.
-> - $\alpha$ décrit la **procédure** répétée, pas un résultat isolé.
-
----
-
-## 2. La p-value et son lien avec α
-
-### 2.1 Définition et mises en garde
-
-L'American Statistical Association donne une définition informelle : sous un modèle statistique spécifié, la p-value est la probabilité d'obtenir un résumé des données (par exemple la différence observée entre deux groupes) au moins aussi extrême que celui observé.[^asa] Sa déclaration de 2016 énonce six principes, résumés ici :[^asa]
-
-| # | Principe (paraphrase) |
-|---|---|
-| 1 | Une p-value peut indiquer à quel point les données sont incompatibles avec un modèle statistique spécifié |
-| 2 | Elle ne mesure ni la probabilité que l'hypothèse étudiée soit vraie, ni la probabilité que le hasard seul ait produit les données |
-| 3 | Les conclusions scientifiques et les décisions ne devraient pas reposer uniquement sur le franchissement d'un seuil |
-| 4 | Une inférence correcte exige un compte rendu complet et transparent (toutes les analyses réalisées, pas seulement les significatives) |
-| 5 | Une p-value ne mesure ni la taille d'un effet, ni son importance |
-| 6 | Seule, une p-value ne constitue pas une bonne mesure de preuve |
-
-### 2.2 Deux traditions mélangées : Fisher et Neyman–Pearson
-
-La pratique courante mêle deux cadres historiquement distincts.[^schneider]
-
-| | **Fisher (test de signification)** | **Neyman–Pearson (test d'hypothèses)** |
-|---|---|---|
-| Hypothèses | Une seule, l'hypothèse nulle | Deux hypothèses complémentaires |
-| Rôle de la p-value | Calculée après les données ; mesure de surprise sous $H_0$ ; indice contre $H_0$ pour une expérience | Non utilisée : la statistique est comparée à une valeur critique |
-| $\alpha$, $\beta$ | Pas de taux d'erreur à long terme au centre du dispositif | $\alpha$ fixé à l'avance (erreur de type I à long terme), $\beta$ (type II), puissance pour choisir le test et planifier l'échantillon |
-| Résultat non significatif | Suspension du jugement, pas un appui à $H_0$ | Accepter une hypothèse ne signifie pas qu'elle est vraie |
-
-D'après la même source, les manuels appliqués ont fusionné les deux approches à partir des années 1940 en un hybride (le « NHST »), avec des lectures fautives : p-value interprétée comme taux d'erreur de type I observé et comme preuve à la fois, résultat non significatif lu comme acceptation de $H_0$, et p-value lue comme probabilité que $H_0$ soit vraie.[^schneider]
-
-### 2.3 Pourquoi « rejeter si p ≤ α » donne exactement un taux α
-
-Lorsque la loi de la statistique de test est connue, la p-value est **uniformément distribuée** sous $H_0$ : elle est la transformée intégrale de probabilité de la statistique.[^wicklin] Il en résulte que le seuil 0,05 produit une erreur de type I dans 5 % des cas :[^wicklin]
-
-$$P(p \le \alpha \mid H_0) = \alpha .$$
-
-> [!example] Simulation réalisée pour ce cours (non sourcée : voir annexe)
-> 20 000 tests t à deux échantillons (20 observations par groupe, deux groupes tirés dans la même loi normale, donc $H_0$ vraie) :
-> - $p < 0{,}05$ dans **4,85 %** des tests ;
-> - $p < 0{,}01$ dans **0,94 %** ;
-> - $p < 0{,}10$ dans **9,71 %**.
->
-> Chaque seuil reproduit son propre niveau, aux fluctuations d'échantillonnage près. L'expérience de Wicklin, avec 10 000 échantillons et un test t unilatéral, montre le même histogramme plat.[^wicklin]
-
-<div style="text-align:center">
-<svg style="max-width:100%;height:auto" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 576 259.2" xmlns="http://www.w3.org/2000/svg" version="1.1">
-<defs>
-<style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
-</defs>
-<g id="figure_1">
-<g id="patch_1">
-<path d="M 0 259.2
-L 576 259.2
-L 576 0
-L 0 0
-z
-" style="fill: #ffffff"/>
-</g>
-<g id="axes_1">
-<g id="patch_2">
-<path d="M 61.65957 209.700859
-L 564.12 209.700859
-L 564.12 28.53625
-L 61.65957 28.53625
-z
-" style="fill: #ffffff"/>
-</g>
-<g id="patch_3">
-<path d="M 84.498681 209.700859
-L 107.337791 209.700859
-L 107.337791 88.507983
-L 84.498681 88.507983
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_4">
-<path d="M 107.337791 209.700859
-L 130.176902 209.700859
-L 130.176902 88.258101
-L 107.337791 88.258101
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_5">
-<path d="M 130.176902 209.700859
-L 153.016012 209.700859
-L 153.016012 82.885633
-L 130.176902 82.885633
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_6">
-<path d="M 153.016012 209.700859
-L 175.855123 209.700859
-L 175.855123 83.635279
-L 153.016012 83.635279
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_7">
-<path d="M 175.855123 209.700859
-L 198.694233 209.700859
-L 198.694233 84.634808
-L 175.855123 84.634808
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_8">
-<path d="M 198.694233 209.700859
-L 221.533343 209.700859
-L 221.533343 87.258572
-L 198.694233 87.258572
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_9">
-<path d="M 221.533343 209.700859
-L 244.372454 209.700859
-L 244.372454 83.635279
-L 221.533343 83.635279
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_10">
-<path d="M 244.372454 209.700859
-L 267.211564 209.700859
-L 267.211564 83.760221
-L 244.372454 83.760221
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_11">
-<path d="M 267.211564 209.700859
-L 290.050675 209.700859
-L 290.050675 81.136457
-L 267.211564 81.136457
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_12">
-<path d="M 290.050675 209.700859
-L 312.889785 209.700859
-L 312.889785 83.760221
-L 290.050675 83.760221
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_13">
-<path d="M 312.889785 209.700859
-L 335.728896 209.700859
-L 335.728896 93.88045
-L 312.889785 93.88045
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_14">
-<path d="M 335.728896 209.700859
-L 358.568006 209.700859
-L 358.568006 84.634808
-L 335.728896 84.634808
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_15">
-<path d="M 358.568006 209.700859
-L 381.407116 209.700859
-L 381.407116 81.636222
-L 358.568006 81.636222
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_16">
-<path d="M 381.407116 209.700859
-L 404.246227 209.700859
-L 404.246227 85.259514
-L 381.407116 85.259514
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_17">
-<path d="M 404.246227 209.700859
-L 427.085337 209.700859
-L 427.085337 84.384926
-L 404.246227 84.384926
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_18">
-<path d="M 427.085337 209.700859
-L 449.924448 209.700859
-L 449.924448 90.007276
-L 427.085337 90.007276
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_19">
-<path d="M 449.924448 209.700859
-L 472.763558 209.700859
-L 472.763558 79.387282
-L 449.924448 79.387282
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_20">
-<path d="M 472.763558 209.700859
-L 495.602669 209.700859
-L 495.602669 82.260927
-L 472.763558 82.260927
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_21">
-<path d="M 495.602669 209.700859
-L 518.441779 209.700859
-L 518.441779 77.013401
-L 495.602669 77.013401
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="patch_22">
-<path d="M 518.441779 209.700859
-L 541.28089 209.700859
-L 541.28089 89.257629
-L 518.441779 89.257629
-z
-" clip-path="url(#p322bdd93f4)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
-</g>
-<g id="matplotlib.axis_1">
-<g id="xtick_1">
-<g id="line2d_1">
-<defs>
-<path id="m0697c5a3c1" d="M 0 0
-L 0 3.5
-" style="stroke: #000000; stroke-width: 0.8"/>
-</defs>
-<g>
-<use xlink:href="#m0697c5a3c1" x="84.498681" y="209.700859" style="stroke: #000000; stroke-width: 0.8"/>
-</g>
-</g>
-<g id="text_1">
-<!-- 0.0 -->
-<g transform="translate(76.252118 227.357109) scale(0.11 -0.11)">
-<defs>
-<path id="Inter-Regular-53f" d="M 2019 -63
-C 3059 -63 3656 809 3656 2325
-C 3656 3834 3050 4719 2019 4719
-C 988 4719 381 3834 381 2325
-C 381 806 981 -63 2019 -63
-z
-M 2019 456
-C 1338 456 953 1144 953 2325
-C 953 3509 1338 4203 2019 4203
-C 2700 4203 3084 3513 3084 2325
-C 3084 1144 2700 456 2019 456
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-5e0" d="M 922 -41
-C 1156 -41 1344 147 1344 381
-C 1344 616 1156 803 922 803
-C 688 803 500 616 500 381
-C 500 147 688 -41 922 -41
-z
-" transform="scale(0.015625)"/>
-</defs>
-<use xlink:href="#Inter-Regular-53f"/>
-<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(86.84375 0)"/>
-</g>
-</g>
-</g>
-<g id="xtick_2">
-<g id="line2d_2">
-<g>
-<use xlink:href="#m0697c5a3c1" x="175.855123" y="209.700859" style="stroke: #000000; stroke-width: 0.8"/>
-</g>
-</g>
-<g id="text_2">
-<!-- 0.2 -->
-<g transform="translate(167.585357 227.357109) scale(0.11 -0.11)">
-<defs>
-<path id="Inter-Regular-541" d="M 481 0
-L 3447 0
-L 3447 522
-L 1300 522
-L 1300 559
-L 2319 1644
-C 3141 2519 3369 2916 3369 3419
-C 3369 4147 2778 4719 1947 4719
-C 1119 4719 494 4159 494 3334
-L 1063 3334
-C 1063 3859 1400 4203 1931 4203
-C 2428 4203 2806 3900 2806 3413
-C 2806 2984 2544 2666 2028 2106
-L 481 428
-L 481 0
-z
-" transform="scale(0.015625)"/>
-</defs>
-<use xlink:href="#Inter-Regular-53f"/>
-<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
-<use xlink:href="#Inter-Regular-541" transform="translate(89.375 0)"/>
-</g>
-</g>
-</g>
-<g id="xtick_3">
-<g id="line2d_3">
-<g>
-<use xlink:href="#m0697c5a3c1" x="267.211564" y="209.700859" style="stroke: #000000; stroke-width: 0.8"/>
-</g>
-</g>
-<g id="text_3">
-<!-- 0.4 -->
-<g transform="translate(258.743283 227.357109) scale(0.11 -0.11)">
-<defs>
-<path id="Inter-Regular-544" d="M 375 947
-L 2566 947
-L 2566 0
-L 3134 0
-L 3134 947
-L 3766 947
-L 3766 1469
-L 3134 1469
-L 3134 4656
-L 2413 4656
-L 375 1431
-L 375 947
-z
-M 2569 1469
-L 1009 1469
-L 1009 1506
-L 2531 3913
-L 2569 3913
-L 2569 1469
-z
-" transform="scale(0.015625)"/>
-</defs>
-<use xlink:href="#Inter-Regular-53f"/>
-<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
-<use xlink:href="#Inter-Regular-544" transform="translate(89.375 0)"/>
-</g>
-</g>
-</g>
-<g id="xtick_4">
-<g id="line2d_4">
-<g>
-<use xlink:href="#m0697c5a3c1" x="358.568006" y="209.700859" style="stroke: #000000; stroke-width: 0.8"/>
-</g>
-</g>
-<g id="text_4">
-<!-- 0.6 -->
-<g transform="translate(350.38074 227.357109) scale(0.11 -0.11)">
-<defs>
-<path id="Inter-Regular-547" d="M 2019 -63
-C 2969 -63 3588 634 3588 1503
-C 3588 2403 2925 3044 2128 3044
-C 1644 3044 1231 2813 981 2425
-L 944 2425
-C 944 3544 1375 4194 2091 4194
-C 2575 4194 2866 3888 2969 3484
-L 3550 3484
-C 3438 4216 2872 4719 2091 4719
-C 1034 4719 381 3788 381 2150
-C 381 434 1241 -63 2019 -63
-z
-M 2019 459
-C 1447 459 1028 947 1028 1497
-C 1028 2041 1469 2528 2034 2528
-C 2597 2528 3013 2072 3013 1503
-C 3013 922 2578 459 2019 459
-z
-" transform="scale(0.015625)"/>
-</defs>
-<use xlink:href="#Inter-Regular-53f"/>
-<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
-<use xlink:href="#Inter-Regular-547" transform="translate(86.84375 0)"/>
-</g>
-</g>
-</g>
-<g id="xtick_5">
-<g id="line2d_5">
-<g>
-<use xlink:href="#m0697c5a3c1" x="449.924448" y="209.700859" style="stroke: #000000; stroke-width: 0.8"/>
-</g>
-</g>
-<g id="text_5">
-<!-- 0.8 -->
-<g transform="translate(441.730307 227.357109) scale(0.11 -0.11)">
-<defs>
-<path id="Inter-Regular-549" d="M 1978 -63
-C 2916 -63 3578 478 3578 1238
-C 3578 1825 3175 2325 2669 2419
-L 2669 2444
-C 3109 2559 3403 2988 3403 3481
-C 3403 4191 2794 4719 1978 4719
-C 1150 4719 550 4191 550 3481
-C 550 2988 838 2559 1291 2444
-L 1291 2419
-C 769 2325 381 1825 381 1238
-C 381 478 1031 -63 1978 -63
-z
-M 1978 453
-C 1350 453 966 775 966 1269
-C 966 1784 1391 2153 1978 2153
-C 2553 2153 2984 1784 2984 1269
-C 2984 775 2594 453 1978 453
-z
-M 1978 2650
-C 1475 2650 1125 2966 1125 3438
-C 1125 3903 1463 4206 1978 4206
-C 2484 4206 2828 3903 2828 3438
-C 2828 2966 2469 2650 1978 2650
-z
-" transform="scale(0.015625)"/>
-</defs>
-<use xlink:href="#Inter-Regular-53f"/>
-<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
-<use xlink:href="#Inter-Regular-549" transform="translate(87.125 0)"/>
-</g>
-</g>
-</g>
-<g id="xtick_6">
-<g id="line2d_6">
-<g>
-<use xlink:href="#m0697c5a3c1" x="541.28089" y="209.700859" style="stroke: #000000; stroke-width: 0.8"/>
-</g>
-</g>
-<g id="text_6">
-<!-- 1.0 -->
-<g transform="translate(534.128311 227.357109) scale(0.11 -0.11)">
-<defs>
-<path id="Inter-Regular-540" d="M 2041 4656
-L 1313 4656
-L 300 3909
-L 300 3272
-L 1425 4106
-L 1456 4106
-L 1456 0
-L 2041 0
-L 2041 4656
-z
-" transform="scale(0.015625)"/>
-</defs>
-<use xlink:href="#Inter-Regular-540"/>
-<use xlink:href="#Inter-Regular-5e0" transform="translate(40.671875 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(66.953125 0)"/>
-</g>
-</g>
-</g>
-<g id="text_7">
-<!-- p-value -->
-<g transform="translate(293.048535 244.66668) scale(0.11 -0.11)">
-<defs>
-<path id="Inter-Regular-34d" d="M 494 -1306
-L 1056 -1306
-L 1056 541
-L 1100 541
-C 1216 347 1450 -75 2116 -75
-C 2988 -75 3594 625 3594 1738
-C 3594 2844 2984 3538 2113 3538
-C 1431 3538 1216 3119 1100 2934
-L 1038 2934
-L 1038 3494
-L 494 3494
-L 494 -1306
-z
-M 2031 428
-C 1397 428 1050 966 1050 1744
-C 1050 2516 1388 3034 2031 3034
-C 2694 3034 3022 2469 3022 1744
-C 3022 1009 2684 428 2031 428
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-5b5" d="M 2494 2247
-L 450 2247
-L 450 1728
-L 2494 1728
-L 2494 2247
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-3d6" d="M 1503 0
-L 2094 0
-L 3428 3494
-L 2813 3494
-L 2069 1422
-C 1959 1119 1878 813 1800 522
-C 1719 813 1638 1119 1528 1422
-L 784 3494
-L 169 3494
-L 1503 0
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-1fc" d="M 1472 -81
-C 2063 -81 2391 228 2509 475
-L 2547 475
-L 2547 0
-L 3100 0
-L 3100 2303
-C 3100 3394 2259 3538 1791 3538
-C 1250 3538 650 3344 381 2709
-L 922 2531
-C 1031 2775 1303 3044 1806 3044
-C 2291 3044 2538 2794 2538 2359
-L 2538 2341
-C 2538 2081 2263 2100 1641 2022
-C 994 1941 281 1794 281 994
-C 281 306 809 -81 1472 -81
-z
-M 1569 416
-C 1150 416 847 603 847 966
-C 847 1363 1206 1494 1616 1547
-C 1831 1575 2444 1638 2538 1747
-L 2538 1263
-C 2538 834 2191 416 1569 416
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-2e2" d="M 1056 4656
-L 494 4656
-L 494 0
-L 1056 0
-L 1056 4656
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-395" d="M 1678 -44
-C 2138 -44 2519 144 2747 653
-L 2747 0
-L 3291 0
-L 3291 3494
-L 2725 3494
-L 2725 1400
-C 2725 803 2347 463 1847 463
-C 1359 463 1056 784 1056 1322
-L 1056 3494
-L 494 3494
-L 494 1275
-C 494 391 972 -44 1678 -44
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-267" d="M 1963 -75
-C 2678 -75 3200 284 3363 813
-L 2819 963
-C 2688 606 2378 425 1966 425
-C 1347 425 922 825 894 1556
-L 3419 1556
-L 3419 1791
-C 3419 3081 2638 3538 1897 3538
-C 944 3538 325 2791 325 1719
-C 325 644 950 -75 1963 -75
-z
-M 897 2031
-C 931 2566 1297 3038 1897 3038
-C 2472 3038 2794 2625 2847 2031
-L 897 2031
-z
-" transform="scale(0.015625)"/>
-</defs>
-<use xlink:href="#Inter-Regular-34d"/>
-<use xlink:href="#Inter-Regular-5b5" transform="translate(61.234375 0)"/>
-<use xlink:href="#Inter-Regular-3d6" transform="translate(107.234375 0)"/>
-<use xlink:href="#Inter-Regular-1fc" transform="translate(162.953125 0)"/>
-<use xlink:href="#Inter-Regular-2e2" transform="translate(219.109375 0)"/>
-<use xlink:href="#Inter-Regular-395" transform="translate(243.328125 0)"/>
-<use xlink:href="#Inter-Regular-267" transform="translate(302.453125 0)"/>
-</g>
-</g>
-</g>
-<g id="matplotlib.axis_2">
-<g id="ytick_1">
-<g id="line2d_7">
-<defs>
-<path id="md481c8082f" d="M 0 0
-L -3.5 0
-" style="stroke: #000000; stroke-width: 0.8"/>
-</defs>
-<g>
-<use xlink:href="#md481c8082f" x="61.65957" y="209.700859" style="stroke: #000000; stroke-width: 0.8"/>
-</g>
-</g>
-<g id="text_8">
-<!-- 0 -->
-<g transform="translate(47.719258 215.028984) scale(0.11 -0.11)">
-<use xlink:href="#Inter-Regular-53f"/>
-</g>
-</g>
-</g>
-<g id="ytick_2">
-<g id="line2d_8">
-<g>
-<use xlink:href="#md481c8082f" x="61.65957" y="184.712637" style="stroke: #000000; stroke-width: 0.8"/>
-</g>
-</g>
-<g id="text_9">
-<!-- 200 -->
-<g transform="translate(34.070664 190.040762) scale(0.11 -0.11)">
-<use xlink:href="#Inter-Regular-541"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(60.984375 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(124.078125 0)"/>
-</g>
-</g>
-</g>
-<g id="ytick_3">
-<g id="line2d_9">
-<g>
-<use xlink:href="#md481c8082f" x="61.65957" y="159.724415" style="stroke: #000000; stroke-width: 0.8"/>
-</g>
-</g>
-<g id="text_10">
-<!-- 400 -->
-<g transform="translate(33.673633 165.05254) scale(0.11 -0.11)">
-<use xlink:href="#Inter-Regular-544"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(64.59375 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(127.6875 0)"/>
-</g>
-</g>
-</g>
-<g id="ytick_4">
-<g id="line2d_10">
-<g>
-<use xlink:href="#md481c8082f" x="61.65957" y="134.736193" style="stroke: #000000; stroke-width: 0.8"/>
-</g>
-</g>
-<g id="text_11">
-<!-- 600 -->
-<g transform="translate(33.957227 140.064318) scale(0.11 -0.11)">
-<use xlink:href="#Inter-Regular-547"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(62.015625 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(125.109375 0)"/>
-</g>
-</g>
-</g>
-<g id="ytick_5">
-<g id="line2d_11">
-<g>
-<use xlink:href="#md481c8082f" x="61.65957" y="109.747971" style="stroke: #000000; stroke-width: 0.8"/>
-</g>
-</g>
-<g id="text_12">
-<!-- 800 -->
-<g transform="translate(33.974414 115.076096) scale(0.11 -0.11)">
-<use xlink:href="#Inter-Regular-549"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(61.859375 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(124.953125 0)"/>
-</g>
-</g>
-</g>
-<g id="ytick_6">
-<g id="line2d_12">
-<g>
-<use xlink:href="#md481c8082f" x="61.65957" y="84.759749" style="stroke: #000000; stroke-width: 0.8"/>
-</g>
-</g>
-<g id="text_13">
-<!-- 1000 -->
-<g transform="translate(29.364727 90.087874) scale(0.11 -0.11)">
-<use xlink:href="#Inter-Regular-540"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(40.671875 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(103.765625 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(166.859375 0)"/>
-</g>
-</g>
-</g>
-<g id="ytick_7">
-<g id="line2d_13">
-<g>
-<use xlink:href="#md481c8082f" x="61.65957" y="59.771527" style="stroke: #000000; stroke-width: 0.8"/>
-</g>
-</g>
-<g id="text_14">
-<!-- 1200 -->
-<g transform="translate(29.596758 65.099652) scale(0.11 -0.11)">
-<use xlink:href="#Inter-Regular-540"/>
-<use xlink:href="#Inter-Regular-541" transform="translate(40.671875 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(101.65625 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(164.75 0)"/>
-</g>
-</g>
-</g>
-<g id="ytick_8">
-<g id="line2d_14">
-<g>
-<use xlink:href="#md481c8082f" x="61.65957" y="34.783305" style="stroke: #000000; stroke-width: 0.8"/>
-</g>
-</g>
-<g id="text_15">
-<!-- 1400 -->
-<g transform="translate(29.199727 40.11143) scale(0.11 -0.11)">
-<use xlink:href="#Inter-Regular-540"/>
-<use xlink:href="#Inter-Regular-544" transform="translate(40.671875 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(105.265625 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(168.359375 0)"/>
-</g>
-</g>
-</g>
-<g id="text_16">
-<!-- Nombre de tests (sur 20 000) -->
-<g transform="translate(22.546406 196.216523) rotate(-90) scale(0.11 -0.11)">
-<defs>
-<path id="Inter-Regular-12d" d="M 563 0
-L 1159 0
-L 1159 2656
-C 1159 2881 1138 3347 1113 3944
-C 1475 3297 1653 2984 1866 2650
-L 3553 0
-L 4259 0
-L 4259 4656
-L 3666 4656
-L 3666 1800
-C 3666 1550 3669 1153 3706 703
-C 3494 1125 3281 1481 3156 1678
-L 1263 4656
-L 563 4656
-L 563 0
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-318" d="M 1916 -75
-C 2869 -75 3513 647 3513 1725
-C 3513 2819 2869 3538 1916 3538
-C 966 3538 325 2819 325 1725
-C 325 647 966 -75 1916 -75
-z
-M 1916 428
-C 1219 428 897 1038 897 1725
-C 897 2422 1219 3034 1916 3034
-C 2622 3034 2944 2419 2944 1725
-C 2944 1038 2622 428 1916 428
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-300" d="M 494 0
-L 1056 0
-L 1056 2200
-C 1056 2756 1428 3044 1838 3044
-C 2231 3044 2522 2784 2522 2397
-L 2522 0
-L 3084 0
-L 3084 2281
-C 3084 2722 3372 3044 3844 3044
-C 4219 3044 4547 2844 4547 2341
-L 4547 0
-L 5113 0
-L 5113 2356
-C 5113 3166 4619 3556 4013 3556
-C 3506 3556 3078 3284 2913 2844
-C 2788 3275 2481 3556 2022 3556
-C 1609 3556 1216 3325 1044 2853
-L 1041 3494
-L 494 3494
-L 494 0
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-243" d="M 2116 -75
-C 2988 -75 3594 625 3594 1738
-C 3594 2844 2984 3538 2113 3538
-C 1431 3538 1216 3119 1100 2934
-L 1056 2934
-L 1056 4656
-L 494 4656
-L 494 0
-L 1038 0
-L 1038 541
-L 1100 541
-C 1216 347 1450 -75 2116 -75
-z
-M 2031 428
-C 1397 428 1050 966 1050 1744
-C 1050 2516 1388 3034 2031 3034
-C 2694 3034 3022 2469 3022 1744
-C 3022 1009 2684 428 2031 428
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-356" d="M 494 0
-L 1056 0
-L 1056 2188
-C 1056 2659 1425 3000 1928 3000
-C 2078 3000 2231 2975 2266 2969
-L 2266 3534
-C 2200 3538 2063 3544 1981 3544
-C 1566 3544 1203 3309 1075 2956
-L 1038 2956
-L 1038 3494
-L 494 3494
-L 494 0
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-6eb" transform="scale(0.015625)"/>
-<path id="Inter-Regular-256" d="M 1803 -75
-C 2469 -75 2703 347 2819 541
-L 2881 541
-L 2881 0
-L 3425 0
-L 3425 4656
-L 2863 4656
-L 2863 2934
-L 2819 2934
-C 2703 3119 2488 3538 1806 3538
-C 934 3538 325 2844 325 1738
-C 325 625 931 -75 1803 -75
-z
-M 1888 428
-C 1234 428 897 1009 897 1744
-C 897 2469 1225 3034 1888 3034
-C 2531 3034 2869 2516 2869 1744
-C 2869 966 2522 428 1888 428
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-37b" d="M 1869 3494
-L 1150 3494
-L 1150 4325
-L 588 4325
-L 588 3494
-L 63 3494
-L 63 3013
-L 588 3013
-L 588 863
-C 588 291 944 -44 1547 -44
-C 1691 -44 1850 -22 1966 19
-L 1850 494
-C 1756 475 1634 456 1563 456
-C 1266 456 1150 594 1150 906
-L 1150 3013
-L 1869 3013
-L 1869 3494
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-369" d="M 1681 -75
-C 2500 -75 3059 372 3059 984
-C 3059 1463 2763 1778 2128 1928
-L 1600 2053
-C 1191 2150 1013 2294 1013 2553
-C 1013 2844 1325 3059 1741 3059
-C 2191 3059 2388 2816 2484 2566
-L 2994 2697
-C 2834 3188 2456 3538 1738 3538
-C 994 3538 444 3119 444 2519
-C 444 2028 747 1716 1381 1566
-L 1963 1428
-C 2306 1347 2475 1188 2475 947
-C 2475 659 2163 419 1675 419
-C 1256 419 972 591 872 975
-L 338 847
-C 463 244 963 -75 1681 -75
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-59f" d="M 681 1897
-C 681 984 956 31 1488 -872
-L 2034 -872
-C 1497 238 1253 1069 1253 1897
-C 1253 2809 1550 3956 2034 4941
-L 1488 4941
-C 1019 4169 681 2913 681 1897
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-5a9" d="M 300 -578
-L 847 -578
-C 1369 309 1653 1263 1653 2191
-C 1653 3203 1316 4466 847 5234
-L 300 5234
-C 784 4250 1081 3103 1081 2191
-C 1081 1388 853 563 300 -578
-z
-" transform="scale(0.015625)"/>
-</defs>
-<use xlink:href="#Inter-Regular-12d"/>
-<use xlink:href="#Inter-Regular-318" transform="translate(75.34375 0)"/>
-<use xlink:href="#Inter-Regular-300" transform="translate(135.3125 0)"/>
-<use xlink:href="#Inter-Regular-243" transform="translate(222.90625 0)"/>
-<use xlink:href="#Inter-Regular-356" transform="translate(284.140625 0)"/>
-<use xlink:href="#Inter-Regular-267" transform="translate(320.125 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(378.421875 0)"/>
-<use xlink:href="#Inter-Regular-256" transform="translate(406.546875 0)"/>
-<use xlink:href="#Inter-Regular-267" transform="translate(467.78125 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(526.078125 0)"/>
-<use xlink:href="#Inter-Regular-37b" transform="translate(554.203125 0)"/>
-<use xlink:href="#Inter-Regular-267" transform="translate(585.953125 0)"/>
-<use xlink:href="#Inter-Regular-369" transform="translate(644.25 0)"/>
-<use xlink:href="#Inter-Regular-37b" transform="translate(697.03125 0)"/>
-<use xlink:href="#Inter-Regular-369" transform="translate(728.78125 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(781.5625 0)"/>
-<use xlink:href="#Inter-Regular-59f" transform="translate(809.6875 0)"/>
-<use xlink:href="#Inter-Regular-369" transform="translate(846.15625 0)"/>
-<use xlink:href="#Inter-Regular-395" transform="translate(898.9375 0)"/>
-<use xlink:href="#Inter-Regular-356" transform="translate(958.0625 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(995.703125 0)"/>
-<use xlink:href="#Inter-Regular-541" transform="translate(1023.828125 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(1084.8125 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(1147.90625 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(1176.03125 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(1239.125 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(1302.21875 0)"/>
-<use xlink:href="#Inter-Regular-5a9" transform="translate(1365.3125 0)"/>
-</g>
-</g>
-</g>
-<g id="line2d_15">
-<path d="M 61.65957 84.759749
-L 564.12 84.759749
-" clip-path="url(#p322bdd93f4)" style="fill: none; stroke-dasharray: 3.7,1.6; stroke-dashoffset: 0; stroke: #718096"/>
-</g>
-<g id="patch_23">
-<path d="M 61.65957 209.700859
-L 61.65957 28.53625
-" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
-</g>
-<g id="patch_24">
-<path d="M 61.65957 209.700859
-L 564.12 209.700859
-" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
-</g>
-<g id="text_17">
-<!-- barre rouge : p &lt; 0,05, soit 4,9 % des tests -->
-<g transform="translate(121.041257 57.272705) scale(0.095 -0.095)">
-<defs>
-<path id="Inter-Regular-293" d="M 1909 -1381
-C 2759 -1381 3431 -994 3431 -91
-L 3431 3494
-L 2884 3494
-L 2884 2934
-L 2831 2934
-C 2713 3122 2488 3538 1813 3538
-C 941 3538 325 2844 325 1763
-C 325 666 963 56 1800 56
-C 2475 56 2697 441 2816 641
-L 2869 641
-L 2869 -59
-C 2869 -634 2466 -891 1909 -891
-C 1294 -891 1075 -578 928 -375
-L 472 -669
-C 688 -1053 1134 -1381 1909 -1381
-z
-M 1894 556
-C 1238 556 897 1056 897 1775
-C 897 2472 1228 3034 1894 3034
-C 2538 3034 2875 2516 2875 1775
-C 2875 1013 2528 556 1894 556
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-5e3" d="M 922 -41
-C 1156 -41 1344 147 1344 381
-C 1344 616 1156 803 922 803
-C 688 803 500 616 500 381
-C 500 147 688 -41 922 -41
-z
-M 922 2488
-C 1156 2488 1344 2675 1344 2909
-C 1344 3144 1156 3331 922 3331
-C 688 3331 500 3144 500 2909
-C 500 2675 688 2488 922 2488
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-5fb" d="M 544 2134
-L 3494 647
-L 3494 1253
-L 1269 2309
-L 1269 2347
-L 3494 3403
-L 3494 4016
-L 544 2528
-L 544 2134
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-5df" d="M 400 -1122
-L 831 -1122
-L 1319 650
-L 675 650
-L 400 -1122
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-545" d="M 1956 -63
-C 2853 -63 3509 594 3509 1488
-C 3509 2388 2881 3047 2028 3047
-C 1706 3047 1397 2934 1206 2775
-L 1181 2775
-L 1341 4134
-L 3291 4134
-L 3291 4656
-L 841 4656
-L 566 2350
-L 1122 2281
-C 1306 2422 1631 2525 1919 2525
-C 2503 2525 2928 2078 2928 1478
-C 2928 888 2519 459 1956 459
-C 1488 459 1106 759 1069 1175
-L 494 1175
-C 525 463 1138 -63 1956 -63
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-2b2" d="M 494 0
-L 1056 0
-L 1056 3494
-L 494 3494
-L 494 0
-z
-M 778 4066
-C 994 4066 1172 4231 1172 4438
-C 1172 4644 994 4809 778 4809
-C 566 4809 388 4644 388 4438
-C 388 4231 566 4066 778 4066
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-54a" d="M 1884 -63
-C 2938 -63 3588 866 3588 2513
-C 3588 4225 2728 4706 1963 4719
-C 1006 4734 381 4025 381 3156
-C 381 2259 1044 1616 1847 1616
-C 2334 1616 2744 1856 2994 2238
-L 3031 2238
-C 3031 1109 2594 463 1884 463
-C 1394 463 1103 772 1006 1184
-L 419 1184
-C 528 441 1094 -63 1884 -63
-z
-M 1934 2134
-C 1372 2134 963 2588 963 3159
-C 963 3734 1391 4197 1953 4197
-C 2525 4197 2947 3706 2947 3172
-C 2947 2625 2500 2134 1934 2134
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-6ca" d="M 4656 -91
-C 5247 -91 5566 344 5566 856
-L 5566 1100
-C 5566 1609 5256 2044 4656 2044
-C 4069 2044 3741 1613 3741 1100
-L 3741 856
-C 3741 344 4059 -91 4656 -91
-z
-M 1634 2597
-C 2225 2597 2544 3031 2544 3544
-L 2544 3788
-C 2544 4297 2234 4731 1634 4731
-C 1047 4731 719 4300 719 3788
-L 719 3544
-C 719 3031 1038 2597 1634 2597
-z
-M 1263 0
-L 1791 0
-L 4991 4656
-L 4463 4656
-L 1263 0
-z
-M 4656 319
-C 4334 319 4219 578 4219 856
-L 4219 1100
-C 4219 1375 4344 1638 4656 1638
-C 4981 1638 5088 1375 5088 1100
-L 5088 856
-C 5088 578 4972 319 4656 319
-z
-M 1634 3006
-C 1313 3006 1197 3266 1197 3544
-L 1197 3788
-C 1197 4063 1322 4325 1634 4325
-C 1959 4325 2066 4063 2066 3788
-L 2066 3544
-C 2066 3266 1950 3006 1634 3006
-z
-" transform="scale(0.015625)"/>
-</defs>
-<use xlink:href="#Inter-Regular-243"/>
-<use xlink:href="#Inter-Regular-1fc" transform="translate(62.21875 0)"/>
-<use xlink:href="#Inter-Regular-356" transform="translate(118.375 0)"/>
-<use xlink:href="#Inter-Regular-356" transform="translate(157.578125 0)"/>
-<use xlink:href="#Inter-Regular-267" transform="translate(193.5625 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(251.859375 0)"/>
-<use xlink:href="#Inter-Regular-356" transform="translate(279.984375 0)"/>
-<use xlink:href="#Inter-Regular-318" transform="translate(315.96875 0)"/>
-<use xlink:href="#Inter-Regular-395" transform="translate(375.9375 0)"/>
-<use xlink:href="#Inter-Regular-293" transform="translate(435.0625 0)"/>
-<use xlink:href="#Inter-Regular-267" transform="translate(496.390625 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(554.6875 0)"/>
-<use xlink:href="#Inter-Regular-5e3" transform="translate(582.8125 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(611.625 0)"/>
-<use xlink:href="#Inter-Regular-34d" transform="translate(639.75 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(700.984375 0)"/>
-<use xlink:href="#Inter-Regular-5fb" transform="translate(729.109375 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(795.265625 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(823.390625 0)"/>
-<use xlink:href="#Inter-Regular-5df" transform="translate(883.953125 0)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(910.234375 0)"/>
-<use xlink:href="#Inter-Regular-545" transform="translate(973.328125 0)"/>
-<use xlink:href="#Inter-Regular-5df" transform="translate(1031.4375 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(1060.25 0)"/>
-<use xlink:href="#Inter-Regular-369" transform="translate(1088.375 0)"/>
-<use xlink:href="#Inter-Regular-318" transform="translate(1141.15625 0)"/>
-<use xlink:href="#Inter-Regular-2b2" transform="translate(1201.125 0)"/>
-<use xlink:href="#Inter-Regular-37b" transform="translate(1225.34375 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(1258.0625 0)"/>
-<use xlink:href="#Inter-Regular-544" transform="translate(1286.1875 0)"/>
-<use xlink:href="#Inter-Regular-5df" transform="translate(1347.40625 0)"/>
-<use xlink:href="#Inter-Regular-54a" transform="translate(1375.53125 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(1437.546875 0)"/>
-<use xlink:href="#Inter-Regular-6ca" transform="translate(1465.671875 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(1563.859375 0)"/>
-<use xlink:href="#Inter-Regular-256" transform="translate(1591.984375 0)"/>
-<use xlink:href="#Inter-Regular-267" transform="translate(1653.21875 0)"/>
-<use xlink:href="#Inter-Regular-369" transform="translate(1711.515625 0)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(1764.296875 0)"/>
-<use xlink:href="#Inter-Regular-37b" transform="translate(1792.421875 0)"/>
-<use xlink:href="#Inter-Regular-267" transform="translate(1824.171875 0)"/>
-<use xlink:href="#Inter-Regular-369" transform="translate(1882.46875 0)"/>
-<use xlink:href="#Inter-Regular-37b" transform="translate(1935.25 0)"/>
-<use xlink:href="#Inter-Regular-369" transform="translate(1967 0)"/>
-</g>
-</g>
-<g id="text_18">
-<!-- 20 000 tests où $H_0$ est vraie : la p-value est uniforme sur [0, 1] -->
-<g transform="translate(150.804785 22.53625) scale(0.11 -0.11)">
-<defs>
-<path id="Inter-Regular-39b" d="M 1678 -44
-C 2138 -44 2519 144 2747 653
-L 2747 0
-L 3291 0
-L 3291 3494
-L 2725 3494
-L 2725 1400
-C 2725 803 2347 463 1847 463
-C 1359 463 1056 784 1056 1322
-L 1056 3494
-L 494 3494
-L 494 1275
-C 494 391 972 -44 1678 -44
-z
-M 1669 3950
-L 2131 3950
-L 1694 4869
-L 1066 4869
-L 1669 3950
-z
-" transform="scale(0.015625)"/>
-<path id="DejaVuSans-Oblique-2b" d="M 1081 4666
-L 1716 4666
-L 1344 2753
-L 3634 2753
-L 4006 4666
-L 4641 4666
-L 3731 0
-L 3097 0
-L 3531 2222
-L 1241 2222
-L 806 0
-L 172 0
-L 1081 4666
-z
-" transform="scale(0.015625)"/>
-<path id="DejaVuSans-13" d="M 2034 4250
-Q 1547 4250 1301 3770
-Q 1056 3291 1056 2328
-Q 1056 1369 1301 889
-Q 1547 409 2034 409
-Q 2525 409 2770 889
-Q 3016 1369 3016 2328
-Q 3016 3291 2770 3770
-Q 2525 4250 2034 4250
-z
-M 2034 4750
-Q 2819 4750 3233 4129
-Q 3647 3509 3647 2328
-Q 3647 1150 3233 529
-Q 2819 -91 2034 -91
-Q 1250 -91 836 529
-Q 422 1150 422 2328
-Q 422 3509 836 4129
-Q 1250 4750 2034 4750
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-307" d="M 1056 2094
-C 1056 2691 1434 3031 1938 3031
-C 2425 3031 2725 2709 2725 2172
-L 2725 0
-L 3288 0
-L 3288 2219
-C 3288 3103 2813 3538 2106 3538
-C 1638 3538 1263 3341 1038 2847
-L 1034 3494
-L 494 3494
-L 494 0
-L 1056 0
-L 1056 2094
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-288" d="M 2119 3494
-L 1313 3494
-L 1313 3834
-C 1313 4172 1463 4353 1809 4353
-C 1966 4353 2053 4319 2113 4300
-L 2269 4781
-C 2184 4819 2009 4875 1744 4875
-C 1234 4875 750 4566 750 3959
-L 750 3494
-L 63 3494
-L 63 3013
-L 750 3013
-L 750 0
-L 1313 0
-L 1313 3013
-L 2119 3013
-L 2119 3494
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-5a1" d="M 706 -872
-L 1950 -872
-L 1950 -394
-L 1244 -394
-L 1244 4463
-L 1950 4463
-L 1950 4941
-L 706 4941
-L 706 -872
-z
-" transform="scale(0.015625)"/>
-<path id="Inter-Regular-5a3" d="M 384 -872
-L 1628 -872
-L 1628 4941
-L 384 4941
-L 384 4463
-L 1091 4463
-L 1091 -394
-L 384 -394
-L 384 -872
-z
-" transform="scale(0.015625)"/>
-</defs>
-<use xlink:href="#Inter-Regular-541" transform="translate(0 0.796875)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(60.986328 0.796875)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(124.072266 0.796875)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(152.197266 0.796875)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(215.283203 0.796875)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(278.369141 0.796875)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(341.455078 0.796875)"/>
-<use xlink:href="#Inter-Regular-37b" transform="translate(369.580078 0.796875)"/>
-<use xlink:href="#Inter-Regular-267" transform="translate(402.294922 0.796875)"/>
-<use xlink:href="#Inter-Regular-369" transform="translate(460.595703 0.796875)"/>
-<use xlink:href="#Inter-Regular-37b" transform="translate(513.378906 0.796875)"/>
-<use xlink:href="#Inter-Regular-369" transform="translate(546.09375 0.796875)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(598.876953 0.796875)"/>
-<use xlink:href="#Inter-Regular-318" transform="translate(627.001953 0.796875)"/>
-<use xlink:href="#Inter-Regular-39b" transform="translate(686.962891 0.796875)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(746.09375 0.796875)"/>
-<use xlink:href="#DejaVuSans-Oblique-2b" transform="translate(774.21875 0.796875)"/>
-<use xlink:href="#DejaVuSans-13" transform="translate(849.414062 -14.203076) scale(0.7)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(896.68457 0.796875)"/>
-<use xlink:href="#Inter-Regular-267" transform="translate(924.80957 0.796875)"/>
-<use xlink:href="#Inter-Regular-369" transform="translate(983.110352 0.796875)"/>
-<use xlink:href="#Inter-Regular-37b" transform="translate(1035.893555 0.796875)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(1068.608398 0.796875)"/>
-<use xlink:href="#Inter-Regular-3d6" transform="translate(1096.733398 0.796875)"/>
-<use xlink:href="#Inter-Regular-356" transform="translate(1152.93457 0.796875)"/>
-<use xlink:href="#Inter-Regular-1fc" transform="translate(1190.581055 0.796875)"/>
-<use xlink:href="#Inter-Regular-2b2" transform="translate(1246.733398 0.796875)"/>
-<use xlink:href="#Inter-Regular-267" transform="translate(1270.952148 0.796875)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(1329.25293 0.796875)"/>
-<use xlink:href="#Inter-Regular-5e3" transform="translate(1357.37793 0.796875)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(1386.186523 0.796875)"/>
-<use xlink:href="#Inter-Regular-2e2" transform="translate(1414.311523 0.796875)"/>
-<use xlink:href="#Inter-Regular-1fc" transform="translate(1438.530273 0.796875)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(1494.682617 0.796875)"/>
-<use xlink:href="#Inter-Regular-34d" transform="translate(1522.807617 0.796875)"/>
-<use xlink:href="#Inter-Regular-5b5" transform="translate(1584.038086 0.796875)"/>
-<use xlink:href="#Inter-Regular-3d6" transform="translate(1630.03418 0.796875)"/>
-<use xlink:href="#Inter-Regular-1fc" transform="translate(1686.235352 0.796875)"/>
-<use xlink:href="#Inter-Regular-2e2" transform="translate(1742.387695 0.796875)"/>
-<use xlink:href="#Inter-Regular-395" transform="translate(1766.606445 0.796875)"/>
-<use xlink:href="#Inter-Regular-267" transform="translate(1825.737305 0.796875)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(1884.038086 0.796875)"/>
-<use xlink:href="#Inter-Regular-267" transform="translate(1912.163086 0.796875)"/>
-<use xlink:href="#Inter-Regular-369" transform="translate(1970.463867 0.796875)"/>
-<use xlink:href="#Inter-Regular-37b" transform="translate(2023.24707 0.796875)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(2055.961914 0.796875)"/>
-<use xlink:href="#Inter-Regular-395" transform="translate(2084.086914 0.796875)"/>
-<use xlink:href="#Inter-Regular-307" transform="translate(2143.217773 0.796875)"/>
-<use xlink:href="#Inter-Regular-2b2" transform="translate(2202.299805 0.796875)"/>
-<use xlink:href="#Inter-Regular-288" transform="translate(2226.518555 0.796875)"/>
-<use xlink:href="#Inter-Regular-318" transform="translate(2263.530273 0.796875)"/>
-<use xlink:href="#Inter-Regular-356" transform="translate(2323.491211 0.796875)"/>
-<use xlink:href="#Inter-Regular-300" transform="translate(2361.137695 0.796875)"/>
-<use xlink:href="#Inter-Regular-267" transform="translate(2448.735352 0.796875)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(2507.036133 0.796875)"/>
-<use xlink:href="#Inter-Regular-369" transform="translate(2535.161133 0.796875)"/>
-<use xlink:href="#Inter-Regular-395" transform="translate(2587.944336 0.796875)"/>
-<use xlink:href="#Inter-Regular-356" transform="translate(2647.075195 0.796875)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(2684.72168 0.796875)"/>
-<use xlink:href="#Inter-Regular-5a1" transform="translate(2712.84668 0.796875)"/>
-<use xlink:href="#Inter-Regular-53f" transform="translate(2749.321289 0.796875)"/>
-<use xlink:href="#Inter-Regular-5df" transform="translate(2812.407227 0.796875)"/>
-<use xlink:href="#Inter-Regular-6eb" transform="translate(2841.21582 0.796875)"/>
-<use xlink:href="#Inter-Regular-540" transform="translate(2869.34082 0.796875)"/>
-<use xlink:href="#Inter-Regular-5a3" transform="translate(2910.014648 0.796875)"/>
-</g>
-</g>
-</g>
-</g>
-<defs>
-<clipPath id="p322bdd93f4">
-<rect x="61.65957" y="28.53625" width="502.46043" height="181.164609"/>
-</clipPath>
-</defs>
-</svg>
-</div>
-
-*Figure 2 : simulation pour ce cours. Sous $H_0$, la p-value est uniforme ; la première barre (p < 0,05) contient environ 5 % des tests.*
-
-> [!tip] À retenir de la section 2
-> - La p-value mesure l'incompatibilité des données avec $H_0$ ; elle ne donne pas la probabilité que $H_0$ soit vraie.[^asa]
-> - Sous $H_0$ et avec un test correctement construit, la p-value est uniforme : le niveau nominal $\alpha$ est alors le vrai taux d'erreur.[^wicklin]
-> - **Tout ce qui suit repose sur la condition « test correctement construit, hypothèse fixée à l'avance ».** Les sections 3 et 4 examinent ce qui se passe quand elle n'est plus remplie.
-
----
-
-## 3. Quand l'erreur de type I dérape
-
-La garantie « $\alpha$ = taux d'erreur » vaut pour **un test, une hypothèse fixée à l'avance, des observations convenablement modélisées**. Quatre mécanismes sont documentés pour la fragiliser.
+*(Cette liste est une synthèse pédagogique des mécanismes présentés dans la suite, chacun étant sourcé dans sa leçon ; elle n'est pas tirée d'une source unique.)*
 
 ```mermaid
 flowchart TB
-    G["Garantie classique :<br/>un test, hypothèse fixée à l'avance,<br/>observations bien modélisées"] --> M1["3.1 Tests multiples<br/>beaucoup de tests à la fois"]
-    G --> M2["3.2 Dépendance ignorée<br/>pseudoréplication"]
-    G --> M3["3.3 Sélection par les données<br/>double dipping"]
-    G --> M4["3.4 Flexibilité d'analyse<br/>et faible probabilité a priori"]
-    M1 --> X["Taux de faux positifs<br/>supérieur au niveau nominal"]
-    M2 --> X
-    M3 --> X
-    M4 --> X
+    G["Garantie : P(rejeter | H0) = α"] --> C1["C1 : un seul test"]
+    G --> C2["C2 : observations indépendantes"]
+    G --> C3["C3 : hypothèse fixée à l'avance"]
+    C1 -.->|violée| X1["Leçon 4 : tests multiples"]
+    C2 -.->|violée| X2["Leçon 5 : pseudoréplication"]
+    C3 -.->|violée| X3["Leçon 6 : double dipping"]
 ```
 
-### 3.1 Les tests multiples
+> [!tip] À retenir de la leçon 3
+> - Le test de deux groupes de cellules repose sur la même logique que la pièce.
+> - La garantie « α = taux d'erreur » est **conditionnelle** : un test, des observations indépendantes, une hypothèse fixée avant les données.
+> - Le sujet de l'inférence sélective se situe sur la **troisième** condition.
 
-**Le problème.** Une expérience de type microarray avec 10 000 tests au seuil de 0,05 donnerait environ 500 gènes « significatifs » même si aucun gène n'avait d'effet réel.[^cmu] Le nombre attendu de faux positifs vaut $E[V]=m_0\alpha$, où $m_0$ est le nombre d'hypothèses nulles vraies.[^cmu]
+---
 
-**Deux critères de contrôle.**
+## Leçon 4 : trop de tests, ou 10 000 gènes à la fois
 
-| Critère | Définition | Procédure classique | Conséquence |
+> [!abstract] Objectif
+> Comprendre pourquoi un seuil de 5 % produit des centaines de faux positifs quand des milliers de gènes sont testés, et savoir appliquer Bonferroni et Benjamini–Hochberg à la main.
+
+### 4.1 L'intuition
+
+Chaque test, pris isolément, se trompe 5 % du temps sous $H_0$. Avec 10 000 tests où **aucun** gène n'a d'effet réel, environ 5 % de 10 000, soit 500 gènes, sortent « significatifs ».[^cmu] Le nombre attendu de faux positifs vaut $E[V]=m_0\alpha$, avec $m_0$ le nombre d'hypothèses nulles vraies.[^cmu]
+
+*(Simulation réalisée pour ce cours.)* Sur une répétition de 10 000 tests où toutes les hypothèses nulles sont vraies : 464 faux positifs sans correction, pour 500 attendus.
+
+### 4.2 Deux façons de définir « l'erreur globale »
+
+Notations : $m$ hypothèses testées, $V$ faux positifs, $R$ rejets au total.[^bh]
+
+| Critère | Définition | Procédure usuelle | Remarque |
 |---|---|---|---|
-| **FWER** (taux d'erreur par famille) | $P(V \ge 1)$ : probabilité d'au moins un faux positif[^cmu] | **Bonferroni** : tester chaque hypothèse au niveau $\alpha/m$[^cmu] | Contrôle fort de la FWER, mais perte de puissance importante[^cmu] |
-| **FDR** (taux de fausses découvertes) | $E[V/R]$, avec $V/R=0$ si $R=0$ : espérance de la proportion de faux positifs parmi les rejets[^bh] | **Benjamini–Hochberg** : trier les p-values, retenir le plus grand $k$ tel que $p_{(k)} \le \tfrac{k}{m}\,q$, rejeter les $k$ plus petites[^bh] | FDR contrôlé à $q$ pour des statistiques indépendantes ; critère moins strict que la FWER, donc plus de puissance[^bh] |
+| **FWER** (taux d'erreur par famille) | $P(V\ge 1)$ : probabilité d'**au moins un** faux positif[^cmu] | **Bonferroni** : tester chaque hypothèse au niveau $\alpha/m$[^cmu] | Contrôle fort, mais forte perte de puissance[^cmu] |
+| **FDR** (taux de fausses découvertes) | $E[V/R]$ (avec $V/R=0$ si $R=0$) : **proportion attendue** de faux positifs parmi les rejets[^bh] | **Benjamini–Hochberg** (BH)[^bh] | Critère moins strict que la FWER, donc plus de rejets possibles[^bh] |
 
-Notations : $m$ hypothèses testées, $V$ faux positifs, $R$ rejets au total.[^bh] Avec toutes les hypothèses nulles vraies, FDR et FWER coïncident ; sinon la FDR est inférieure ou égale à la FWER.[^bh]
+La procédure de BH : trier les p-values $p_{(1)}\le\dots\le p_{(m)}$, trouver le **plus grand** $k$ tel que $p_{(k)}\le \frac{k}{m}\,q$, puis rejeter les $k$ plus petites p-values. Le contrôle du FDR à $q$ est démontré pour des statistiques indépendantes.[^bh]
 
-```mermaid
-flowchart LR
-    T["m tests au seuil α"] --> E["≈ m0 × α faux positifs<br/>attendus"]
-    E --> B["Bonferroni : seuil α/m<br/>contrôle P(V ≥ 1)"]
-    E --> H["Benjamini–Hochberg<br/>contrôle E(V/R)"]
-```
+### 4.3 Exemple à la main : 8 gènes
 
-> [!example] Simulation réalisée pour ce cours (non sourcée : voir annexe)
-> **Scénario 1, toutes les hypothèses nulles sont vraies** (10 000 gènes, 100 répétitions). Sans correction, la première répétition contient 464 faux positifs (valeur attendue : 500). Probabilité d'au moins un faux positif, estimée sur les 100 répétitions : **100 %** sans correction, **6 %** avec Bonferroni, **6 %** avec Benjamini–Hochberg (niveau visé : 5 %, l'écart restant compatible avec la fluctuation d'une estimation sur 100 répétitions).
->
-> **Scénario 2, 1 000 gènes sur 10 000 ont un vrai effet** (différence d'un écart-type, 20 observations par groupe, moyenne sur 100 répétitions) :
->
-> | Méthode | Gènes déclarés significatifs | dont faux | FDR estimée | $P(V\ge1)$ estimée |
-> |---|---|---|---|---|
-> | Sans correction | 1 317 | 448 | 34,0 % | 100 % |
-> | Bonferroni | 35 | moins de 0,1 | 0,04 % | 1 % |
-> | Benjamini–Hochberg | 501 | 22 | 4,4 % | 100 % |
->
-> Lecture : Bonferroni évite presque tout faux positif mais ne détecte que 35 des 1 000 vrais effets. Benjamini–Hochberg en détecte environ 480 pour une proportion de fausses découvertes d'environ 4 %, sous le niveau visé de 5 % ; la FWER n'est en revanche pas contrôlée (au moins un faux positif dans chaque répétition). Cette différence illustre le propos de Benjamini et Hochberg : un critère moins strict autorise plus de rejets.[^bh]
+Huit p-values fictives, $q=\alpha=0{,}05$ :
+
+| Rang $k$ | $p_{(k)}$ | Seuil BH $\frac{k}{8}\times0{,}05$ | $p_{(k)}\le$ seuil ? |
+|---|---|---|---|
+| 1 | 0,001 | 0,00625 | oui |
+| 2 | 0,008 | 0,0125 | oui |
+| 3 | 0,012 | 0,01875 | oui |
+| 4 | 0,030 | 0,025 | non |
+| 5 | 0,041 | 0,03125 | non |
+| 6 | 0,200 | 0,0375 | non |
+| 7 | 0,450 | 0,04375 | non |
+| 8 | 0,830 | 0,05 | non |
+
+- Plus grand $k$ satisfaisant la condition : $k=3$. **BH rejette 3 gènes.**
+- **Bonferroni** : seuil $0{,}05/8=0{,}00625$ ; seule $p=0{,}001$ passe. **1 gène rejeté.**
+- **Sans correction** (seuil 0,05) : $0{,}001;\,0{,}008;\,0{,}012;\,0{,}030;\,0{,}041$ passent. **5 gènes rejetés**, dont probablement des faux positifs.
+
+*(Valeurs fictives et calculs réalisés pour ce cours.)* BH se situe entre les deux : plus de rejets que Bonferroni, moins que l'absence de correction.
+
+### 4.4 À grande échelle
+
+*(Simulation réalisée pour ce cours.)* 10 000 gènes, dont 1 000 ont un vrai effet (une différence d'un écart-type, 20 observations par groupe), moyenne sur 100 répétitions :
+
+| Méthode | Gènes déclarés significatifs | dont faux | FDR estimée | $P(V\ge1)$ estimée |
+|---|---|---|---|---|
+| Sans correction | 1 317 | 448 | 34,0 % | 100 % |
+| Bonferroni | 35 | moins de 0,1 | 0,04 % | 1 % |
+| Benjamini–Hochberg | 501 | 22 | 4,4 % | 100 % |
 
 <div style="text-align:center">
 <svg style="max-width:100%;height:auto" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 576 273.6" xmlns="http://www.w3.org/2000/svg" version="1.1">
@@ -5997,121 +7844,1720 @@ z
 </svg>
 </div>
 
-*Figure 3 : simulation pour ce cours (scénario 2).*
+*Figure 4 : la même simulation en barres. Vert : vrais effets détectés ; rouge : faux positifs.*
 
-Pour une présentation d'ensemble de ces corrections en biologie, l'article de Noble (*Nature Biotechnology*, 2009) pose la question de la correction des événements aléatoires qui paraissent faussement significatifs ; seul son résumé a été lu pour ce cours.[^noble]
+Lecture : sans correction, plus d'un tiers des « découvertes » sont fausses. Bonferroni évite presque tout faux positif mais ne détecte que 35 des 1 000 vrais effets. BH en détecte environ 480 pour une proportion de fausses découvertes d'environ 4 %, sous le niveau visé de 5 % ; en revanche, la probabilité d'au moins un faux positif n'est pas contrôlée. C'est exactement le compromis annoncé : un critère moins strict autorise plus de rejets.[^bh]
 
-### 3.2 Des observations qui ne sont pas indépendantes : la pseudoréplication
+Dans le cas où toutes les hypothèses nulles sont vraies (100 répétitions), la probabilité d'au moins un faux positif est de 100 % sans correction, et de 6 % avec Bonferroni comme avec BH, soit proche du niveau visé de 5 % compte tenu des 100 répétitions seulement.
 
-Dans les données de single-cell, les cellules d'un même individu partagent un fonds génétique et environnemental. Ignorer cette structure conduit à une inférence biaisée et à un taux d'erreur de type I fortement gonflé.[^zimmerman] Selon Squair et al., les méthodes qui ignorent la variation entre réplicats biologiques peuvent trouver des centaines de gènes différentiels en l'absence de vraie différence biologique, et les méthodes de type pseudobulk obtiennent de meilleurs résultats dans leur banc d'essai.[^squair] Zimmerman et al. soutiennent, eux, que les modèles linéaires généralisés mixtes sont plus puissants que l'agrégation pseudobulk, jugée conservatrice.[^zimmerman] Le détail figure dans [[cours-scrnaseq-inference-selective]], section 3.6.
+Pour approfondir les corrections multiples en biologie : l'article de Noble (*Nature Biotechnology*, 2009), dont seul le résumé a été lu pour ce cours.[^noble]
 
-```mermaid
-flowchart TB
-    P["Un individu"] --> C["Plusieurs milliers de cellules<br/>corrélées entre elles"]
-    C --> F["Test traitant chaque cellule<br/>comme indépendante"]
-    F --> X["p-values trop petites<br/>erreur de type I gonflée"]
-    P --> OK["Unité statistique correcte :<br/>l'individu, ou un modèle à effet aléatoire"]
-```
-
-### 3.3 La sélection par les données : le double dipping
-
-Kriegeskorte et ses coauteurs définissent le *double dipping* comme l'utilisation d'un **même jeu de données** pour sélectionner des données puis pour analyser le sous-ensemble sélectionné. Cela peut déformer les statistiques descriptives et rendre l'inférence invalide.[^kriegeskorte] Le problème survient lorsque les statistiques de test ne sont pas indépendantes du critère de sélection sous l'hypothèse nulle.[^kriegeskorte]
-
-Trois éléments chiffrés de cette source :[^kriegeskorte]
-
-- Sur 134 articles d'IRM fonctionnelle de 2008 parus dans cinq revues de premier plan, 42 % comportaient au moins une analyse sélective non indépendante, et 14 % de plus pouvaient en comporter une faute de détails méthodologiques.
-- Dans leur simulation d'une région d'intérêt définie à partir des données, un test censé donner une différence nulle était significatif dans 20 répétitions sur 100 à $p<0{,}05$ et dans 9 sur 100 à $p<0{,}01$ : des taux « nettement supérieurs au niveau nominal », même avec correction des comparaisons multiples dans l'étape de sélection.
-- Avec des données de pur bruit, des effets illusoires apparaissent aussi bien dans l'analyse univariée que dans l'analyse multivariée.
-
-Les recommandations de Kriegeskorte et al. : privilégier une analyse non sélective quand elle est possible ; sinon vérifier que les statistiques de test sont indépendantes du critère de sélection sous $H_0$ ; à défaut, **scinder les données** (une partie pour sélectionner, l'autre pour tester) ; en dernier recours, modéliser l'effet de la sélection par simulation.[^kriegeskorte]
-
-Un autre exemple, issu de la littérature statistique : dans l'« effet tiroir » (*file drawer effect*), un test au niveau nominal $\alpha=0{,}05$ appliqué seulement aux effets sélectionnés parce qu'ils sont grands a un taux de rejet à tort d'environ **0,16** parmi les hypothèses nulles vraies effectivement testées.[^fithian]
-
-```mermaid
-flowchart LR
-    D["Données"] --> S["Sélection<br/>par exemple : clustering,<br/>région d'intérêt, effets les plus grands"]
-    S --> T1["Test sur les MÊMES données<br/>double dipping"]
-    S --> T2["Test sur des données<br/>indépendantes de la sélection"]
-    T1 --> X["Taux d'erreur supérieur à α"]
-    T2 --> OK["Taux d'erreur ≈ α"]
-```
-
-### 3.4 Flexibilité des analyses et faible probabilité a priori
-
-Ioannidis relie l'erreur de type I à un autre ingrédient : la probabilité qu'une relation soit vraie *avant* l'étude. Avec $\alpha$ le niveau, $1-\beta$ la puissance et $R$ le rapport entre relations vraies et relations nulles parmi celles testées, la **valeur prédictive positive** (probabilité qu'un résultat déclaré significatif soit vrai), sans biais, est :[^ioannidis]
-
-$$\mathrm{PPV}=\frac{(1-\beta)\,R}{R-\beta R+\alpha}.$$
-
-Un résultat est plus souvent vrai que faux lorsque $(1-\beta)R > \alpha$.[^ioannidis] Exemple de l'auteur : 100 000 polymorphismes testés, environ 10 vraiment associés ($R=10^{-4}$), puissance de 60 %, $\alpha=0{,}05$ ; la probabilité qu'un résultat significatif soit vrai est d'environ $12\times10^{-4}$.[^ioannidis] Les corollaires listés incluent un plus grand nombre de relations testées avec moins de présélection, ainsi qu'une plus grande flexibilité des plans, des critères et des analyses, qui augmente le biais.[^ioannidis]
-
-> [!example] Calcul réalisé pour ce cours à partir de la formule ci-dessus ($\alpha=0{,}05$, sans biais)
-> | $R$ (relations vraies / nulles) | PPV, puissance 80 % | PPV, puissance 20 % |
-> |---|---|---|
-> | 1 | 0,94 | 0,80 |
-> | 0,1 | 0,62 | 0,29 |
-> | 0,01 | 0,14 | 0,04 |
-> | 0,001 | 0,016 | 0,004 |
+> [!question]- Exercice 3 : la probabilité de se tromper au moins une fois
+> 20 tests indépendants sont réalisés au niveau 5 %, toutes les hypothèses nulles étant vraies. (a) Combien de faux positifs attendre ? (b) Quelle est la probabilité d'au moins un faux positif ? (c) Quel seuil de Bonferroni utiliser ?
 >
-> Avec le même $\alpha=0{,}05$, la fiabilité d'un résultat « significatif » varie fortement selon le contexte. Le niveau $\alpha$ borne la probabilité de rejeter à tort **sous $H_0$** ; il ne dit pas quelle proportion des résultats significatifs est fausse (cohérent avec le principe 2 de l'ASA[^asa]).
+> **Correction.** (a) $m_0\alpha=20\times0{,}05=1$ faux positif en moyenne. (b) $1-0{,}95^{20}\approx 1-0{,}358=0{,}642$ : près de deux chances sur trois d'au moins une fausse alerte (le calcul suppose l'indépendance des tests). (c) $0{,}05/20=0{,}0025$.
 
-> [!tip] À retenir de la section 3
-> - **Tests multiples** : sans correction, environ $m\alpha$ faux positifs ; Bonferroni contrôle la FWER, Benjamini–Hochberg la FDR.
-> - **Dépendance** : traiter des cellules corrélées comme indépendantes gonfle l'erreur de type I.
-> - **Double dipping** : sélectionner puis tester sur les mêmes données fausse l'inférence.
-> - **Probabilité a priori faible et flexibilité** : un $\alpha$ de 5 % ne garantit pas que 95 % des résultats significatifs soient vrais.
+> [!tip] À retenir de la leçon 4
+> - Sans correction, environ $m\alpha$ faux positifs si aucun effet n'existe.
+> - **Bonferroni** contrôle la FWER (au moins une erreur) et perd beaucoup de puissance ; **BH** contrôle la FDR (proportion d'erreurs parmi les découvertes) et rejette davantage.
+> - Le choix entre les deux dépend de ce qui est le plus coûteux : une seule fausse alerte, ou une proportion de fausses alertes.
 
 ---
 
-## 4. L'erreur de type I sélective
+## Leçon 5 : des cellules qui se ressemblent (la pseudoréplication)
 
-### 4.1 La garantie classique et la garantie sélective
+> [!abstract] Objectif
+> Comprendre pourquoi traiter chaque cellule comme une observation indépendante gonfle l'erreur de type I, et ce qu'est la bonne unité statistique.
 
-Fithian, Sun et Taylor décrivent l'enjeu : la sélection adaptative (le *data snooping*) casse l'hypothèse sous-jacente à la plupart des méthodes, selon laquelle les questions ont été fixées avant de voir les données. Leur principe directeur : **« la réponse doit être valide, étant donné que la question a été posée »**.[^fithian]
+### 5.1 L'intuition
 
-Soit $(M, H_0)$ le couple *modèle, hypothèse* sélectionné à partir des données. Les deux garanties (écriture adaptée de [^fithian], équations 2 et 3) sont :
+> [!example] Analogie (non sourcée)
+> Pour connaître l'opinion d'une ville, interroger 100 membres **d'une même famille** n'apporte pas 100 avis indépendants : ils partagent un contexte. Interroger 100 familles différentes est plus informatif.
 
-$$\underbrace{P_{M,H_0}\big(\text{rejeter } H_0\big) \le \alpha}_{\text{garantie classique : sans tenir compte de la sélection}}
-\qquad\qquad
-\underbrace{P_{M,H_0}\big(\text{rejeter } H_0 \,\big|\, (M,H_0)\ \text{a été sélectionné}\big) \le \alpha}_{\text{garantie sélective : conditionnelle à la sélection}}$$
+Dans les données de single-cell, les cellules d'un même individu partagent un fonds génétique et environnemental. Ignorer cette structure conduit à une inférence biaisée et à un taux d'erreur de type I fortement gonflé.[^zimmerman] Les méthodes qui ignorent la variation entre réplicats biologiques peuvent déclarer des centaines de gènes différentiels en l'absence de vraie différence biologique.[^squair]
 
-La différence tient au **conditionnement** : le contrôle classique ne dépend pas de la sélection, le contrôle sélectif vaut parmi les cas où la question a effectivement été posée.[^fithian] Lorsque la sélection est indépendante des données utilisées pour l'inférence, les deux garanties coïncident ; le découpage des données en est un cas particulier, et la méthode de « data carving » proposée par les auteurs vise plus d'efficacité en conditionnant sur une partie moindre des données.[^fithian]
+### 5.2 Voir le phénomène
+
+*(Simulation réalisée pour ce cours.)* Deux groupes de 5 individus, 100 cellules par individu. Chaque individu a son propre niveau moyen (effet individuel, écart-type 1), et chaque cellule varie autour (écart-type 1). **Aucune différence entre les deux groupes** : $H_0$ est vraie. Deux façons d'analyser, sur 5 000 répétitions :
+
+| Analyse | Rejets à $\alpha=0{,}05$ |
+|---|---|
+| Test t sur les cellules, chacune traitée comme indépendante (500 contre 500) | **79,6 %** |
+| Test t sur un point par individu : la moyenne de ses 100 cellules (5 contre 5) | **5,3 %** |
+
+<div style="text-align:center">
+<svg style="max-width:100%;height:auto" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 720 252" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<defs>
+<style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+</defs>
+<g id="figure_1">
+<g id="patch_1">
+<path d="M 0 252
+L 720 252
+L 720 0
+L 0 0
+z
+" style="fill: #ffffff"/>
+</g>
+<g id="axes_1">
+<g id="patch_2">
+<path d="M 64.12332 202.500859
+L 366.34291 202.500859
+L 366.34291 39.667109
+L 64.12332 39.667109
+z
+" style="fill: #ffffff"/>
+</g>
+<g id="patch_3">
+<path d="M 77.860574 202.500859
+L 91.597828 202.500859
+L 91.597828 47.421097
+L 77.860574 47.421097
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_4">
+<path d="M 91.597828 202.500859
+L 105.335083 202.500859
+L 105.335083 196.345973
+L 91.597828 196.345973
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_5">
+<path d="M 105.335083 202.500859
+L 119.072337 202.500859
+L 119.072337 197.943127
+L 105.335083 197.943127
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_6">
+<path d="M 119.072337 202.500859
+L 132.809591 202.500859
+L 132.809591 199.501326
+L 119.072337 199.501326
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_7">
+<path d="M 132.809591 202.500859
+L 146.546845 202.500859
+L 146.546845 200.085651
+L 132.809591 200.085651
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_8">
+<path d="M 146.546845 202.500859
+L 160.284099 202.500859
+L 160.284099 199.929831
+L 146.546845 199.929831
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_9">
+<path d="M 160.284099 202.500859
+L 174.021353 202.500859
+L 174.021353 200.163561
+L 160.284099 200.163561
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_10">
+<path d="M 174.021353 202.500859
+L 187.758607 202.500859
+L 187.758607 200.553111
+L 174.021353 200.553111
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_11">
+<path d="M 187.758607 202.500859
+L 201.495861 202.500859
+L 201.495861 200.163561
+L 187.758607 200.163561
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_12">
+<path d="M 201.495861 202.500859
+L 215.233115 202.500859
+L 215.233115 200.825795
+L 201.495861 200.825795
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_13">
+<path d="M 215.233115 202.500859
+L 228.970369 202.500859
+L 228.970369 201.2543
+L 215.233115 201.2543
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_14">
+<path d="M 228.970369 202.500859
+L 242.707623 202.500859
+L 242.707623 201.371165
+L 228.970369 201.371165
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_15">
+<path d="M 242.707623 202.500859
+L 256.444877 202.500859
+L 256.444877 200.78684
+L 242.707623 200.78684
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_16">
+<path d="M 256.444877 202.500859
+L 270.182132 202.500859
+L 270.182132 201.137435
+L 256.444877 201.137435
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_17">
+<path d="M 270.182132 202.500859
+L 283.919386 202.500859
+L 283.919386 201.41012
+L 270.182132 201.41012
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_18">
+<path d="M 283.919386 202.500859
+L 297.65664 202.500859
+L 297.65664 201.02057
+L 283.919386 201.02057
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_19">
+<path d="M 297.65664 202.500859
+L 311.393894 202.500859
+L 311.393894 201.371165
+L 297.65664 201.371165
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_20">
+<path d="M 311.393894 202.500859
+L 325.131148 202.500859
+L 325.131148 201.215345
+L 311.393894 201.215345
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_21">
+<path d="M 325.131148 202.500859
+L 338.868402 202.500859
+L 338.868402 201.33221
+L 325.131148 201.33221
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_22">
+<path d="M 338.868402 202.500859
+L 352.605656 202.500859
+L 352.605656 201.41012
+L 338.868402 201.41012
+z
+" clip-path="url(#pd82518b41e)" style="fill: #c53030; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="matplotlib.axis_1">
+<g id="xtick_1">
+<g id="line2d_1">
+<defs>
+<path id="m38c2b8acf4" d="M 0 0
+L 0 3.5
+" style="stroke: #000000; stroke-width: 0.8"/>
+</defs>
+<g>
+<use xlink:href="#m38c2b8acf4" x="77.860574" y="202.500859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_1">
+<!-- 0.0 -->
+<g transform="translate(69.614012 220.157109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-53f" d="M 2019 -63
+C 3059 -63 3656 809 3656 2325
+C 3656 3834 3050 4719 2019 4719
+C 988 4719 381 3834 381 2325
+C 381 806 981 -63 2019 -63
+z
+M 2019 456
+C 1338 456 953 1144 953 2325
+C 953 3509 1338 4203 2019 4203
+C 2700 4203 3084 3513 3084 2325
+C 3084 1144 2700 456 2019 456
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5e0" d="M 922 -41
+C 1156 -41 1344 147 1344 381
+C 1344 616 1156 803 922 803
+C 688 803 500 616 500 381
+C 500 147 688 -41 922 -41
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(86.84375 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_2">
+<g id="line2d_2">
+<g>
+<use xlink:href="#m38c2b8acf4" x="132.809591" y="202.500859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_2">
+<!-- 0.2 -->
+<g transform="translate(124.539825 220.157109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-541" d="M 481 0
+L 3447 0
+L 3447 522
+L 1300 522
+L 1300 559
+L 2319 1644
+C 3141 2519 3369 2916 3369 3419
+C 3369 4147 2778 4719 1947 4719
+C 1119 4719 494 4159 494 3334
+L 1063 3334
+C 1063 3859 1400 4203 1931 4203
+C 2428 4203 2806 3900 2806 3413
+C 2806 2984 2544 2666 2028 2106
+L 481 428
+L 481 0
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-541" transform="translate(89.375 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_3">
+<g id="line2d_3">
+<g>
+<use xlink:href="#m38c2b8acf4" x="187.758607" y="202.500859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_3">
+<!-- 0.4 -->
+<g transform="translate(179.290326 220.157109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-544" d="M 375 947
+L 2566 947
+L 2566 0
+L 3134 0
+L 3134 947
+L 3766 947
+L 3766 1469
+L 3134 1469
+L 3134 4656
+L 2413 4656
+L 375 1431
+L 375 947
+z
+M 2569 1469
+L 1009 1469
+L 1009 1506
+L 2531 3913
+L 2569 3913
+L 2569 1469
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-544" transform="translate(89.375 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_4">
+<g id="line2d_4">
+<g>
+<use xlink:href="#m38c2b8acf4" x="242.707623" y="202.500859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_4">
+<!-- 0.6 -->
+<g transform="translate(234.520358 220.157109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-547" d="M 2019 -63
+C 2969 -63 3588 634 3588 1503
+C 3588 2403 2925 3044 2128 3044
+C 1644 3044 1231 2813 981 2425
+L 944 2425
+C 944 3544 1375 4194 2091 4194
+C 2575 4194 2866 3888 2969 3484
+L 3550 3484
+C 3438 4216 2872 4719 2091 4719
+C 1034 4719 381 3788 381 2150
+C 381 434 1241 -63 2019 -63
+z
+M 2019 459
+C 1447 459 1028 947 1028 1497
+C 1028 2041 1469 2528 2034 2528
+C 2597 2528 3013 2072 3013 1503
+C 3013 922 2578 459 2019 459
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-547" transform="translate(86.84375 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_5">
+<g id="line2d_5">
+<g>
+<use xlink:href="#m38c2b8acf4" x="297.65664" y="202.500859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_5">
+<!-- 0.8 -->
+<g transform="translate(289.462499 220.157109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-549" d="M 1978 -63
+C 2916 -63 3578 478 3578 1238
+C 3578 1825 3175 2325 2669 2419
+L 2669 2444
+C 3109 2559 3403 2988 3403 3481
+C 3403 4191 2794 4719 1978 4719
+C 1150 4719 550 4191 550 3481
+C 550 2988 838 2559 1291 2444
+L 1291 2419
+C 769 2325 381 1825 381 1238
+C 381 478 1031 -63 1978 -63
+z
+M 1978 453
+C 1350 453 966 775 966 1269
+C 966 1784 1391 2153 1978 2153
+C 2553 2153 2984 1784 2984 1269
+C 2984 775 2594 453 1978 453
+z
+M 1978 2650
+C 1475 2650 1125 2966 1125 3438
+C 1125 3903 1463 4206 1978 4206
+C 2484 4206 2828 3903 2828 3438
+C 2828 2966 2469 2650 1978 2650
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-549" transform="translate(87.125 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_6">
+<g id="line2d_6">
+<g>
+<use xlink:href="#m38c2b8acf4" x="352.605656" y="202.500859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_6">
+<!-- 1.0 -->
+<g transform="translate(345.453078 220.157109) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-540" d="M 2041 4656
+L 1313 4656
+L 300 3909
+L 300 3272
+L 1425 4106
+L 1456 4106
+L 1456 0
+L 2041 0
+L 2041 4656
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-540"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(40.671875 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(66.953125 0)"/>
+</g>
+</g>
+</g>
+<g id="text_7">
+<!-- p-value -->
+<g transform="translate(195.391865 237.46668) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-34d" d="M 494 -1306
+L 1056 -1306
+L 1056 541
+L 1100 541
+C 1216 347 1450 -75 2116 -75
+C 2988 -75 3594 625 3594 1738
+C 3594 2844 2984 3538 2113 3538
+C 1431 3538 1216 3119 1100 2934
+L 1038 2934
+L 1038 3494
+L 494 3494
+L 494 -1306
+z
+M 2031 428
+C 1397 428 1050 966 1050 1744
+C 1050 2516 1388 3034 2031 3034
+C 2694 3034 3022 2469 3022 1744
+C 3022 1009 2684 428 2031 428
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5b5" d="M 2494 2247
+L 450 2247
+L 450 1728
+L 2494 1728
+L 2494 2247
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-3d6" d="M 1503 0
+L 2094 0
+L 3428 3494
+L 2813 3494
+L 2069 1422
+C 1959 1119 1878 813 1800 522
+C 1719 813 1638 1119 1528 1422
+L 784 3494
+L 169 3494
+L 1503 0
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-1fc" d="M 1472 -81
+C 2063 -81 2391 228 2509 475
+L 2547 475
+L 2547 0
+L 3100 0
+L 3100 2303
+C 3100 3394 2259 3538 1791 3538
+C 1250 3538 650 3344 381 2709
+L 922 2531
+C 1031 2775 1303 3044 1806 3044
+C 2291 3044 2538 2794 2538 2359
+L 2538 2341
+C 2538 2081 2263 2100 1641 2022
+C 994 1941 281 1794 281 994
+C 281 306 809 -81 1472 -81
+z
+M 1569 416
+C 1150 416 847 603 847 966
+C 847 1363 1206 1494 1616 1547
+C 1831 1575 2444 1638 2538 1747
+L 2538 1263
+C 2538 834 2191 416 1569 416
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-2e2" d="M 1056 4656
+L 494 4656
+L 494 0
+L 1056 0
+L 1056 4656
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-395" d="M 1678 -44
+C 2138 -44 2519 144 2747 653
+L 2747 0
+L 3291 0
+L 3291 3494
+L 2725 3494
+L 2725 1400
+C 2725 803 2347 463 1847 463
+C 1359 463 1056 784 1056 1322
+L 1056 3494
+L 494 3494
+L 494 1275
+C 494 391 972 -44 1678 -44
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-267" d="M 1963 -75
+C 2678 -75 3200 284 3363 813
+L 2819 963
+C 2688 606 2378 425 1966 425
+C 1347 425 922 825 894 1556
+L 3419 1556
+L 3419 1791
+C 3419 3081 2638 3538 1897 3538
+C 944 3538 325 2791 325 1719
+C 325 644 950 -75 1963 -75
+z
+M 897 2031
+C 931 2566 1297 3038 1897 3038
+C 2472 3038 2794 2625 2847 2031
+L 897 2031
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-34d"/>
+<use xlink:href="#Inter-Regular-5b5" transform="translate(61.234375 0)"/>
+<use xlink:href="#Inter-Regular-3d6" transform="translate(107.234375 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(162.953125 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(219.109375 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(243.328125 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(302.453125 0)"/>
+</g>
+</g>
+</g>
+<g id="matplotlib.axis_2">
+<g id="ytick_1">
+<g id="line2d_7">
+<defs>
+<path id="m11f652ff04" d="M 0 0
+L -3.5 0
+" style="stroke: #000000; stroke-width: 0.8"/>
+</defs>
+<g>
+<use xlink:href="#m11f652ff04" x="64.12332" y="202.500859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_8">
+<!-- 0 -->
+<g transform="translate(50.183008 207.828984) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+</g>
+</g>
+</g>
+<g id="ytick_2">
+<g id="line2d_8">
+<g>
+<use xlink:href="#m11f652ff04" x="64.12332" y="163.545883" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_9">
+<!-- 1000 -->
+<g transform="translate(31.828477 168.874008) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-540"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(40.671875 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(103.765625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(166.859375 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_3">
+<g id="line2d_9">
+<g>
+<use xlink:href="#m11f652ff04" x="64.12332" y="124.590906" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_10">
+<!-- 2000 -->
+<g transform="translate(29.594102 129.919031) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-541"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(60.984375 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(124.078125 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(187.171875 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_4">
+<g id="line2d_10">
+<g>
+<use xlink:href="#m11f652ff04" x="64.12332" y="85.63593" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_11">
+<!-- 3000 -->
+<g transform="translate(29.508164 90.964055) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-543" d="M 1984 -63
+C 2897 -63 3572 503 3572 1266
+C 3572 1853 3225 2284 2631 2381
+L 2631 2419
+C 3106 2559 3403 2944 3403 3469
+C 3403 4131 2872 4719 2003 4719
+C 1184 4719 516 4216 491 3484
+L 1063 3484
+C 1081 3938 1516 4203 1991 4203
+C 2497 4203 2822 3900 2822 3438
+C 2822 2956 2447 2644 1903 2644
+L 1525 2644
+L 1525 2128
+L 1903 2128
+C 2594 2128 2984 1775 2984 1272
+C 2984 788 2559 459 1975 459
+C 1444 459 1025 731 991 1175
+L 391 1175
+C 422 438 1072 -63 1984 -63
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-543"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(61.765625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(124.859375 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(187.953125 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_5">
+<g id="line2d_11">
+<g>
+<use xlink:href="#m11f652ff04" x="64.12332" y="46.680953" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_12">
+<!-- 4000 -->
+<g transform="translate(29.19707 52.009078) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-544"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(64.59375 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(127.6875 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(190.78125 0)"/>
+</g>
+</g>
+</g>
+<g id="text_13">
+<!-- Nombre de simulations -->
+<g transform="translate(22.54375 180.872422) rotate(-90) scale(0.11 -0.11)">
+<defs>
+<path id="Inter-Regular-12d" d="M 563 0
+L 1159 0
+L 1159 2656
+C 1159 2881 1138 3347 1113 3944
+C 1475 3297 1653 2984 1866 2650
+L 3553 0
+L 4259 0
+L 4259 4656
+L 3666 4656
+L 3666 1800
+C 3666 1550 3669 1153 3706 703
+C 3494 1125 3281 1481 3156 1678
+L 1263 4656
+L 563 4656
+L 563 0
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-318" d="M 1916 -75
+C 2869 -75 3513 647 3513 1725
+C 3513 2819 2869 3538 1916 3538
+C 966 3538 325 2819 325 1725
+C 325 647 966 -75 1916 -75
+z
+M 1916 428
+C 1219 428 897 1038 897 1725
+C 897 2422 1219 3034 1916 3034
+C 2622 3034 2944 2419 2944 1725
+C 2944 1038 2622 428 1916 428
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-300" d="M 494 0
+L 1056 0
+L 1056 2200
+C 1056 2756 1428 3044 1838 3044
+C 2231 3044 2522 2784 2522 2397
+L 2522 0
+L 3084 0
+L 3084 2281
+C 3084 2722 3372 3044 3844 3044
+C 4219 3044 4547 2844 4547 2341
+L 4547 0
+L 5113 0
+L 5113 2356
+C 5113 3166 4619 3556 4013 3556
+C 3506 3556 3078 3284 2913 2844
+C 2788 3275 2481 3556 2022 3556
+C 1609 3556 1216 3325 1044 2853
+L 1041 3494
+L 494 3494
+L 494 0
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-243" d="M 2116 -75
+C 2988 -75 3594 625 3594 1738
+C 3594 2844 2984 3538 2113 3538
+C 1431 3538 1216 3119 1100 2934
+L 1056 2934
+L 1056 4656
+L 494 4656
+L 494 0
+L 1038 0
+L 1038 541
+L 1100 541
+C 1216 347 1450 -75 2116 -75
+z
+M 2031 428
+C 1397 428 1050 966 1050 1744
+C 1050 2516 1388 3034 2031 3034
+C 2694 3034 3022 2469 3022 1744
+C 3022 1009 2684 428 2031 428
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-356" d="M 494 0
+L 1056 0
+L 1056 2188
+C 1056 2659 1425 3000 1928 3000
+C 2078 3000 2231 2975 2266 2969
+L 2266 3534
+C 2200 3538 2063 3544 1981 3544
+C 1566 3544 1203 3309 1075 2956
+L 1038 2956
+L 1038 3494
+L 494 3494
+L 494 0
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-6eb" transform="scale(0.015625)"/>
+<path id="Inter-Regular-256" d="M 1803 -75
+C 2469 -75 2703 347 2819 541
+L 2881 541
+L 2881 0
+L 3425 0
+L 3425 4656
+L 2863 4656
+L 2863 2934
+L 2819 2934
+C 2703 3119 2488 3538 1806 3538
+C 934 3538 325 2844 325 1738
+C 325 625 931 -75 1803 -75
+z
+M 1888 428
+C 1234 428 897 1009 897 1744
+C 897 2469 1225 3034 1888 3034
+C 2531 3034 2869 2516 2869 1744
+C 2869 966 2522 428 1888 428
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-369" d="M 1681 -75
+C 2500 -75 3059 372 3059 984
+C 3059 1463 2763 1778 2128 1928
+L 1600 2053
+C 1191 2150 1013 2294 1013 2553
+C 1013 2844 1325 3059 1741 3059
+C 2191 3059 2388 2816 2484 2566
+L 2994 2697
+C 2834 3188 2456 3538 1738 3538
+C 994 3538 444 3119 444 2519
+C 444 2028 747 1716 1381 1566
+L 1963 1428
+C 2306 1347 2475 1188 2475 947
+C 2475 659 2163 419 1675 419
+C 1256 419 972 591 872 975
+L 338 847
+C 463 244 963 -75 1681 -75
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-2b2" d="M 494 0
+L 1056 0
+L 1056 3494
+L 494 3494
+L 494 0
+z
+M 778 4066
+C 994 4066 1172 4231 1172 4438
+C 1172 4644 994 4809 778 4809
+C 566 4809 388 4644 388 4438
+C 388 4231 566 4066 778 4066
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-37b" d="M 1869 3494
+L 1150 3494
+L 1150 4325
+L 588 4325
+L 588 3494
+L 63 3494
+L 63 3013
+L 588 3013
+L 588 863
+C 588 291 944 -44 1547 -44
+C 1691 -44 1850 -22 1966 19
+L 1850 494
+C 1756 475 1634 456 1563 456
+C 1266 456 1150 594 1150 906
+L 1150 3013
+L 1869 3013
+L 1869 3494
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-307" d="M 1056 2094
+C 1056 2691 1434 3031 1938 3031
+C 2425 3031 2725 2709 2725 2172
+L 2725 0
+L 3288 0
+L 3288 2219
+C 3288 3103 2813 3538 2106 3538
+C 1638 3538 1263 3341 1038 2847
+L 1034 3494
+L 494 3494
+L 494 0
+L 1056 0
+L 1056 2094
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-12d"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(75.34375 0)"/>
+<use xlink:href="#Inter-Regular-300" transform="translate(135.3125 0)"/>
+<use xlink:href="#Inter-Regular-243" transform="translate(222.90625 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(284.140625 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(320.125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(378.421875 0)"/>
+<use xlink:href="#Inter-Regular-256" transform="translate(406.546875 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(467.78125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(526.078125 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(554.203125 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(606.984375 0)"/>
+<use xlink:href="#Inter-Regular-300" transform="translate(631.203125 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(718.796875 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(777.921875 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(802.140625 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(858.296875 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(891.015625 0)"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(915.234375 0)"/>
+<use xlink:href="#Inter-Regular-307" transform="translate(975.203125 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(1034.28125 0)"/>
+</g>
+</g>
+</g>
+<g id="patch_23">
+<path d="M 64.12332 202.500859
+L 64.12332 39.667109
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+</g>
+<g id="patch_24">
+<path d="M 64.12332 202.500859
+L 366.34291 202.500859
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+</g>
+<g id="text_14">
+<!-- Chaque cellule traitée comme indépendante -->
+<g transform="translate(111.103428 21.5675) scale(0.1 -0.1)">
+<defs>
+<path id="Inter-Regular-49" d="M 2447 -63
+C 3400 -63 4163 519 4325 1466
+L 3731 1466
+C 3600 831 3056 488 2447 488
+C 1613 488 959 1134 959 2325
+C 959 3519 1609 4169 2447 4169
+C 3053 4169 3600 3828 3731 3191
+L 4325 3191
+C 4159 4150 3391 4719 2447 4719
+C 1253 4719 381 3803 381 2325
+C 381 850 1253 -63 2447 -63
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-29f" d="M 1056 2094
+C 1056 2691 1434 3031 1938 3031
+C 2425 3031 2725 2709 2725 2172
+L 2725 0
+L 3291 0
+L 3291 2219
+C 3291 3103 2813 3538 2106 3538
+C 1650 3538 1284 3353 1056 2888
+L 1056 4656
+L 494 4656
+L 494 0
+L 1056 0
+L 1056 2094
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-353" d="M 3425 -1306
+L 3425 3494
+L 2881 3494
+L 2881 2934
+L 2819 2934
+C 2703 3119 2488 3538 1806 3538
+C 934 3538 325 2844 325 1738
+C 325 625 931 -75 1803 -75
+C 2469 -75 2703 347 2819 541
+L 2863 541
+L 2863 -1306
+L 3425 -1306
+z
+M 1888 428
+C 1234 428 897 1009 897 1744
+C 897 2469 1225 3034 1888 3034
+C 2531 3034 2869 2516 2869 1744
+C 2869 966 2522 428 1888 428
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-24b" d="M 1916 -75
+C 2600 -75 3156 297 3344 919
+L 2806 1072
+C 2703 694 2384 428 1916 428
+C 1219 428 897 1038 897 1725
+C 897 2422 1219 3034 1916 3034
+C 2375 3034 2688 2778 2791 2419
+L 3331 2572
+C 3141 3181 2591 3538 1916 3538
+C 966 3538 325 2819 325 1725
+C 325 647 966 -75 1916 -75
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-26b" d="M 1963 -75
+C 2678 -75 3200 284 3363 813
+L 2819 963
+C 2688 606 2378 425 1966 425
+C 1347 425 922 825 894 1556
+L 3419 1556
+L 3419 1791
+C 3419 3081 2638 3538 1897 3538
+C 944 3538 325 2791 325 1719
+C 325 644 950 -75 1963 -75
+z
+M 897 2031
+C 931 2566 1297 3038 1897 3038
+C 2472 3038 2794 2625 2847 2031
+L 897 2031
+z
+M 1638 3950
+L 2097 3950
+L 2703 4869
+L 2075 4869
+L 1638 3950
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-49"/>
+<use xlink:href="#Inter-Regular-29f" transform="translate(73.046875 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(132.171875 0)"/>
+<use xlink:href="#Inter-Regular-353" transform="translate(188.328125 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(249.5625 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(308.6875 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(366.984375 0)"/>
+<use xlink:href="#Inter-Regular-24b" transform="translate(395.109375 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(452.234375 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(510.53125 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(534.75 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(558.96875 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(618.09375 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(642.3125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(700.609375 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(728.734375 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(761.453125 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(799.09375 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(855.25 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(879.46875 0)"/>
+<use xlink:href="#Inter-Regular-26b" transform="translate(911.21875 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(969.515625 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1027.8125 0)"/>
+<use xlink:href="#Inter-Regular-24b" transform="translate(1055.9375 0)"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(1113.0625 0)"/>
+<use xlink:href="#Inter-Regular-300" transform="translate(1173.03125 0)"/>
+<use xlink:href="#Inter-Regular-300" transform="translate(1260.625 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1348.21875 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1406.515625 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(1434.640625 0)"/>
+<use xlink:href="#Inter-Regular-307" transform="translate(1458.859375 0)"/>
+<use xlink:href="#Inter-Regular-256" transform="translate(1517.9375 0)"/>
+<use xlink:href="#Inter-Regular-26b" transform="translate(1579.171875 0)"/>
+<use xlink:href="#Inter-Regular-34d" transform="translate(1637.46875 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1698.703125 0)"/>
+<use xlink:href="#Inter-Regular-307" transform="translate(1757 0)"/>
+<use xlink:href="#Inter-Regular-256" transform="translate(1816.078125 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(1877.3125 0)"/>
+<use xlink:href="#Inter-Regular-307" transform="translate(1933.46875 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(1992.546875 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(2024.296875 0)"/>
+</g>
+<!-- 79,6 % de p &lt; 0,05 -->
+<g transform="translate(170.239365 33.667109) scale(0.1 -0.1)">
+<defs>
+<path id="Inter-Regular-548" d="M 625 0
+L 1250 0
+L 3316 4103
+L 3316 4656
+L 306 4656
+L 306 4134
+L 2694 4134
+L 2694 4097
+L 625 0
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-54a" d="M 1884 -63
+C 2938 -63 3588 866 3588 2513
+C 3588 4225 2728 4706 1963 4719
+C 1006 4734 381 4025 381 3156
+C 381 2259 1044 1616 1847 1616
+C 2334 1616 2744 1856 2994 2238
+L 3031 2238
+C 3031 1109 2594 463 1884 463
+C 1394 463 1103 772 1006 1184
+L 419 1184
+C 528 441 1094 -63 1884 -63
+z
+M 1934 2134
+C 1372 2134 963 2588 963 3159
+C 963 3734 1391 4197 1953 4197
+C 2525 4197 2947 3706 2947 3172
+C 2947 2625 2500 2134 1934 2134
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5df" d="M 400 -1122
+L 831 -1122
+L 1319 650
+L 675 650
+L 400 -1122
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-6ca" d="M 4656 -91
+C 5247 -91 5566 344 5566 856
+L 5566 1100
+C 5566 1609 5256 2044 4656 2044
+C 4069 2044 3741 1613 3741 1100
+L 3741 856
+C 3741 344 4059 -91 4656 -91
+z
+M 1634 2597
+C 2225 2597 2544 3031 2544 3544
+L 2544 3788
+C 2544 4297 2234 4731 1634 4731
+C 1047 4731 719 4300 719 3788
+L 719 3544
+C 719 3031 1038 2597 1634 2597
+z
+M 1263 0
+L 1791 0
+L 4991 4656
+L 4463 4656
+L 1263 0
+z
+M 4656 319
+C 4334 319 4219 578 4219 856
+L 4219 1100
+C 4219 1375 4344 1638 4656 1638
+C 4981 1638 5088 1375 5088 1100
+L 5088 856
+C 5088 578 4972 319 4656 319
+z
+M 1634 3006
+C 1313 3006 1197 3266 1197 3544
+L 1197 3788
+C 1197 4063 1322 4325 1634 4325
+C 1959 4325 2066 4063 2066 3788
+L 2066 3544
+C 2066 3266 1950 3006 1634 3006
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5fb" d="M 544 2134
+L 3494 647
+L 3494 1253
+L 1269 2309
+L 1269 2347
+L 3494 3403
+L 3494 4016
+L 544 2528
+L 544 2134
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-545" d="M 1956 -63
+C 2853 -63 3509 594 3509 1488
+C 3509 2388 2881 3047 2028 3047
+C 1706 3047 1397 2934 1206 2775
+L 1181 2775
+L 1341 4134
+L 3291 4134
+L 3291 4656
+L 841 4656
+L 566 2350
+L 1122 2281
+C 1306 2422 1631 2525 1919 2525
+C 2503 2525 2928 2078 2928 1478
+C 2928 888 2519 459 1956 459
+C 1488 459 1106 759 1069 1175
+L 494 1175
+C 525 463 1138 -63 1956 -63
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-548"/>
+<use xlink:href="#Inter-Regular-54a" transform="translate(55.625 0)"/>
+<use xlink:href="#Inter-Regular-5df" transform="translate(115.109375 0)"/>
+<use xlink:href="#Inter-Regular-547" transform="translate(141.390625 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(203.40625 0)"/>
+<use xlink:href="#Inter-Regular-6ca" transform="translate(231.53125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(329.71875 0)"/>
+<use xlink:href="#Inter-Regular-256" transform="translate(357.84375 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(419.078125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(477.375 0)"/>
+<use xlink:href="#Inter-Regular-34d" transform="translate(505.5 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(566.734375 0)"/>
+<use xlink:href="#Inter-Regular-5fb" transform="translate(594.859375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(661.015625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(689.140625 0)"/>
+<use xlink:href="#Inter-Regular-5df" transform="translate(749.703125 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(775.984375 0)"/>
+<use xlink:href="#Inter-Regular-545" transform="translate(839.078125 0)"/>
+</g>
+</g>
+</g>
+<g id="axes_2">
+<g id="patch_25">
+<path d="M 405.90041 202.500859
+L 708.12 202.500859
+L 708.12 39.667109
+L 405.90041 39.667109
+z
+" style="fill: #ffffff"/>
+</g>
+<g id="patch_26">
+<path d="M 419.637664 202.500859
+L 433.374918 202.500859
+L 433.374918 63.717615
+L 419.637664 63.717615
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_27">
+<path d="M 433.374918 202.500859
+L 447.112172 202.500859
+L 447.112172 67.923168
+L 433.374918 67.923168
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_28">
+<path d="M 447.112172 202.500859
+L 460.849426 202.500859
+L 460.849426 75.282885
+L 447.112172 75.282885
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_29">
+<path d="M 460.849426 202.500859
+L 474.586681 202.500859
+L 474.586681 77.911356
+L 460.849426 77.911356
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_30">
+<path d="M 474.586681 202.500859
+L 488.323935 202.500859
+L 488.323935 74.231497
+L 474.586681 74.231497
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_31">
+<path d="M 488.323935 202.500859
+L 502.061189 202.500859
+L 502.061189 70.551638
+L 488.323935 70.551638
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_32">
+<path d="M 502.061189 202.500859
+L 515.798443 202.500859
+L 515.798443 57.93498
+L 502.061189 57.93498
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_33">
+<path d="M 515.798443 202.500859
+L 529.535697 202.500859
+L 529.535697 83.168297
+L 515.798443 83.168297
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_34">
+<path d="M 529.535697 202.500859
+L 543.272951 202.500859
+L 543.272951 60.56345
+L 529.535697 60.56345
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_35">
+<path d="M 543.272951 202.500859
+L 557.010205 202.500859
+L 557.010205 81.06552
+L 543.272951 81.06552
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_36">
+<path d="M 557.010205 202.500859
+L 570.747459 202.500859
+L 570.747459 80.014132
+L 557.010205 80.014132
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_37">
+<path d="M 570.747459 202.500859
+L 584.484713 202.500859
+L 584.484713 73.705803
+L 570.747459 73.705803
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_38">
+<path d="M 584.484713 202.500859
+L 598.221967 202.500859
+L 598.221967 76.859968
+L 584.484713 76.859968
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_39">
+<path d="M 598.221967 202.500859
+L 611.959221 202.500859
+L 611.959221 60.037756
+L 598.221967 60.037756
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_40">
+<path d="M 611.959221 202.500859
+L 625.696475 202.500859
+L 625.696475 72.654415
+L 611.959221 72.654415
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_41">
+<path d="M 625.696475 202.500859
+L 639.43373 202.500859
+L 639.43373 47.421097
+L 625.696475 47.421097
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_42">
+<path d="M 639.43373 202.500859
+L 653.170984 202.500859
+L 653.170984 86.322461
+L 639.43373 86.322461
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_43">
+<path d="M 653.170984 202.500859
+L 666.908238 202.500859
+L 666.908238 64.769003
+L 653.170984 64.769003
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_44">
+<path d="M 666.908238 202.500859
+L 680.645492 202.500859
+L 680.645492 66.871779
+L 666.908238 66.871779
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="patch_45">
+<path d="M 680.645492 202.500859
+L 694.382746 202.500859
+L 694.382746 80.539826
+L 680.645492 80.539826
+z
+" clip-path="url(#pb2fdf10d6f)" style="fill: #2b6cb0; stroke: #ffffff; stroke-linejoin: miter"/>
+</g>
+<g id="matplotlib.axis_3">
+<g id="xtick_7">
+<g id="line2d_12">
+<g>
+<use xlink:href="#m38c2b8acf4" x="419.637664" y="202.500859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_15">
+<!-- 0.0 -->
+<g transform="translate(411.391102 220.157109) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(86.84375 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_8">
+<g id="line2d_13">
+<g>
+<use xlink:href="#m38c2b8acf4" x="474.586681" y="202.500859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_16">
+<!-- 0.2 -->
+<g transform="translate(466.316915 220.157109) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-541" transform="translate(89.375 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_9">
+<g id="line2d_14">
+<g>
+<use xlink:href="#m38c2b8acf4" x="529.535697" y="202.500859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_17">
+<!-- 0.4 -->
+<g transform="translate(521.067416 220.157109) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-544" transform="translate(89.375 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_10">
+<g id="line2d_15">
+<g>
+<use xlink:href="#m38c2b8acf4" x="584.484713" y="202.500859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_18">
+<!-- 0.6 -->
+<g transform="translate(576.297448 220.157109) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-547" transform="translate(86.84375 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_11">
+<g id="line2d_16">
+<g>
+<use xlink:href="#m38c2b8acf4" x="639.43373" y="202.500859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_19">
+<!-- 0.8 -->
+<g transform="translate(631.239589 220.157109) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(60.5625 0)"/>
+<use xlink:href="#Inter-Regular-549" transform="translate(87.125 0)"/>
+</g>
+</g>
+</g>
+<g id="xtick_12">
+<g id="line2d_17">
+<g>
+<use xlink:href="#m38c2b8acf4" x="694.382746" y="202.500859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_20">
+<!-- 1.0 -->
+<g transform="translate(687.230168 220.157109) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-540"/>
+<use xlink:href="#Inter-Regular-5e0" transform="translate(40.671875 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(66.953125 0)"/>
+</g>
+</g>
+</g>
+<g id="text_21">
+<!-- p-value -->
+<g transform="translate(537.168955 237.46668) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-34d"/>
+<use xlink:href="#Inter-Regular-5b5" transform="translate(61.234375 0)"/>
+<use xlink:href="#Inter-Regular-3d6" transform="translate(107.234375 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(162.953125 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(219.109375 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(243.328125 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(302.453125 0)"/>
+</g>
+</g>
+</g>
+<g id="matplotlib.axis_4">
+<g id="ytick_6">
+<g id="line2d_18">
+<g>
+<use xlink:href="#m11f652ff04" x="405.90041" y="202.500859" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_22">
+<!-- 0 -->
+<g transform="translate(391.960098 207.828984) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-53f"/>
+</g>
+</g>
+</g>
+<g id="ytick_7">
+<g id="line2d_19">
+<g>
+<use xlink:href="#m11f652ff04" x="405.90041" y="176.216154" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_23">
+<!-- 50 -->
+<g transform="translate(385.272441 181.544279) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-545"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(60.796875 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_8">
+<g id="line2d_20">
+<g>
+<use xlink:href="#m11f652ff04" x="405.90041" y="149.931449" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_24">
+<!-- 100 -->
+<g transform="translate(380.545879 155.259574) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-540"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(40.671875 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(103.765625 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_9">
+<g id="line2d_21">
+<g>
+<use xlink:href="#m11f652ff04" x="405.90041" y="123.646743" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_25">
+<!-- 150 -->
+<g transform="translate(380.798535 128.974868) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-540"/>
+<use xlink:href="#Inter-Regular-545" transform="translate(40.671875 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(101.46875 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_10">
+<g id="line2d_22">
+<g>
+<use xlink:href="#m11f652ff04" x="405.90041" y="97.362038" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_26">
+<!-- 200 -->
+<g transform="translate(378.311504 102.690163) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-541"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(60.984375 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(124.078125 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_11">
+<g id="line2d_23">
+<g>
+<use xlink:href="#m11f652ff04" x="405.90041" y="71.077332" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_27">
+<!-- 250 -->
+<g transform="translate(378.56416 76.405457) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-541"/>
+<use xlink:href="#Inter-Regular-545" transform="translate(60.984375 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(121.78125 0)"/>
+</g>
+</g>
+</g>
+<g id="ytick_12">
+<g id="line2d_24">
+<g>
+<use xlink:href="#m11f652ff04" x="405.90041" y="44.792627" style="stroke: #000000; stroke-width: 0.8"/>
+</g>
+</g>
+<g id="text_28">
+<!-- 300 -->
+<g transform="translate(378.225566 50.120752) scale(0.11 -0.11)">
+<use xlink:href="#Inter-Regular-543"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(61.765625 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(124.859375 0)"/>
+</g>
+</g>
+</g>
+</g>
+<g id="patch_46">
+<path d="M 405.90041 202.500859
+L 405.90041 39.667109
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+</g>
+<g id="patch_47">
+<path d="M 405.90041 202.500859
+L 708.12 202.500859
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+</g>
+<g id="text_29">
+<!-- Un point par individu (moyenne des cellules) -->
+<g transform="translate(451.852393 21.5675) scale(0.1 -0.1)">
+<defs>
+<path id="Inter-Regular-1a9" d="M 2384 -75
+C 3481 -75 4200 625 4200 1584
+L 4200 4656
+L 3606 4656
+L 3606 1631
+C 3606 963 3144 475 2384 475
+C 1622 475 1156 963 1156 1631
+L 1156 4656
+L 563 4656
+L 563 1584
+C 563 625 1281 -75 2384 -75
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-59f" d="M 681 1897
+C 681 984 956 31 1488 -872
+L 2034 -872
+C 1497 238 1253 1069 1253 1897
+C 1253 2809 1550 3956 2034 4941
+L 1488 4941
+C 1019 4169 681 2913 681 1897
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-3e8" d="M 438 -1266
+C 497 -1294 650 -1331 850 -1331
+C 1344 -1331 1681 -1078 1894 -522
+L 3428 3494
+L 2816 3494
+L 2066 1422
+C 1956 1119 1875 816 1797 525
+C 1716 816 1638 1116 1528 1422
+L 784 3494
+L 169 3494
+L 1503 -19
+L 1403 -309
+C 1231 -809 984 -884 641 -794
+L 581 -778
+L 438 -1266
+z
+" transform="scale(0.015625)"/>
+<path id="Inter-Regular-5a0" d="M 300 -872
+L 847 -872
+C 1369 16 1653 969 1653 1897
+C 1653 2909 1316 4172 847 4941
+L 300 4941
+C 784 3956 1081 2809 1081 1897
+C 1081 1094 853 269 300 -872
+z
+" transform="scale(0.015625)"/>
+</defs>
+<use xlink:href="#Inter-Regular-1a9"/>
+<use xlink:href="#Inter-Regular-307" transform="translate(74.421875 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(133.5 0)"/>
+<use xlink:href="#Inter-Regular-34d" transform="translate(161.625 0)"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(222.859375 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(282.828125 0)"/>
+<use xlink:href="#Inter-Regular-307" transform="translate(307.046875 0)"/>
+<use xlink:href="#Inter-Regular-37b" transform="translate(366.125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(398.84375 0)"/>
+<use xlink:href="#Inter-Regular-34d" transform="translate(426.96875 0)"/>
+<use xlink:href="#Inter-Regular-1fc" transform="translate(489.1875 0)"/>
+<use xlink:href="#Inter-Regular-356" transform="translate(545.34375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(582.984375 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(611.109375 0)"/>
+<use xlink:href="#Inter-Regular-307" transform="translate(635.328125 0)"/>
+<use xlink:href="#Inter-Regular-256" transform="translate(694.40625 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(755.640625 0)"/>
+<use xlink:href="#Inter-Regular-3d6" transform="translate(779.859375 0)"/>
+<use xlink:href="#Inter-Regular-2b2" transform="translate(836.0625 0)"/>
+<use xlink:href="#Inter-Regular-256" transform="translate(860.28125 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(921.515625 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(980.640625 0)"/>
+<use xlink:href="#Inter-Regular-59f" transform="translate(1008.765625 0)"/>
+<use xlink:href="#Inter-Regular-300" transform="translate(1045.234375 0)"/>
+<use xlink:href="#Inter-Regular-318" transform="translate(1132.828125 0)"/>
+<use xlink:href="#Inter-Regular-3e8" transform="translate(1190.84375 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1245.09375 0)"/>
+<use xlink:href="#Inter-Regular-307" transform="translate(1303.390625 0)"/>
+<use xlink:href="#Inter-Regular-307" transform="translate(1362.46875 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1421.546875 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1479.84375 0)"/>
+<use xlink:href="#Inter-Regular-256" transform="translate(1507.96875 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1569.203125 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(1627.5 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(1680.28125 0)"/>
+<use xlink:href="#Inter-Regular-24b" transform="translate(1708.40625 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1765.53125 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(1823.828125 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(1848.046875 0)"/>
+<use xlink:href="#Inter-Regular-395" transform="translate(1872.265625 0)"/>
+<use xlink:href="#Inter-Regular-2e2" transform="translate(1931.390625 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(1955.609375 0)"/>
+<use xlink:href="#Inter-Regular-369" transform="translate(2013.90625 0)"/>
+<use xlink:href="#Inter-Regular-5a0" transform="translate(2066.6875 0)"/>
+</g>
+<!-- 5,3 % de p &lt; 0,05 -->
+<g transform="translate(514.886768 33.667109) scale(0.1 -0.1)">
+<use xlink:href="#Inter-Regular-545"/>
+<use xlink:href="#Inter-Regular-5df" transform="translate(58.109375 0)"/>
+<use xlink:href="#Inter-Regular-543" transform="translate(84.234375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(146 0)"/>
+<use xlink:href="#Inter-Regular-6ca" transform="translate(174.125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(272.3125 0)"/>
+<use xlink:href="#Inter-Regular-256" transform="translate(300.4375 0)"/>
+<use xlink:href="#Inter-Regular-267" transform="translate(361.671875 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(419.96875 0)"/>
+<use xlink:href="#Inter-Regular-34d" transform="translate(448.09375 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(509.328125 0)"/>
+<use xlink:href="#Inter-Regular-5fb" transform="translate(537.453125 0)"/>
+<use xlink:href="#Inter-Regular-6eb" transform="translate(603.609375 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(631.734375 0)"/>
+<use xlink:href="#Inter-Regular-5df" transform="translate(692.296875 0)"/>
+<use xlink:href="#Inter-Regular-53f" transform="translate(718.578125 0)"/>
+<use xlink:href="#Inter-Regular-545" transform="translate(781.671875 0)"/>
+</g>
+</g>
+</g>
+</g>
+<defs>
+<clipPath id="pd82518b41e">
+<rect x="64.12332" y="39.667109" width="302.21959" height="162.83375"/>
+</clipPath>
+<clipPath id="pb2fdf10d6f">
+<rect x="405.90041" y="39.667109" width="302.21959" height="162.83375"/>
+</clipPath>
+</defs>
+</svg>
+</div>
+
+*Figure 5 : à gauche, p-values quand chaque cellule compte pour une observation : accumulation près de 0. À droite, avec un point par individu : distribution uniforme, α respecté.*
 
 ```mermaid
 flowchart TB
-    subgraph CL["Cadre classique"]
-        direction TB
-        a1["Hypothèse fixée<br/>avant les données"] --> a2["Loi de la statistique<br/>sous H0 connue"] --> a3["P(rejeter | H0) ≤ α"]
-    end
-    subgraph SE["Cadre sélectif"]
-        direction TB
-        b1["Hypothèse choisie<br/>à partir des données"] --> b2["Loi de la statistique sous H0<br/>conditionnelle à la sélection"] --> b3["P(rejeter | H0, sélection) ≤ α"]
-    end
+    I["Individu"] --> C["Ses cellules :<br/>corrélées entre elles"]
+    C --> F["Test traitant chaque cellule<br/>comme indépendante"]
+    F --> X["p-values trop petites<br/>erreur de type I gonflée"]
+    I --> OK["Unité statistique correcte :<br/>l'individu"]
 ```
 
-### 4.2 Application au clustering hiérarchique
+### 5.3 Les remèdes publiés
 
-Gao, Bien et Witten étudient le test d'une **différence de moyennes entre deux clusters** estimés par clustering hiérarchique. Les tests classiques de différence de moyennes conservent leur erreur de type I lorsque les groupes sont spécifiés à l'avance. Lorsque les groupes sont formés par clustering des mêmes données, ils produisent en revanche un taux de faux positifs très supérieur ; les auteurs montrent que ce problème persiste même lorsqu'un jeu de données indépendant sert à former les clusters et un autre à tester.[^gao] Leur méthode contrôle l'**erreur de type I sélective** en tenant compte du fait que l'hypothèse nulle a été choisie à partir des données, et fournit des p-values exactes pour le clustering agglomératif avec plusieurs critères de liaison courants.[^gao]
+Deux solutions existent, avec un désaccord sur leurs mérites relatifs : l'agrégation en **pseudobulk** (une valeur par individu, comme dans la simulation), qui obtient de meilleurs résultats que les méthodes ignorant la variation entre réplicats dans le banc d'essai de Squair et al.,[^squair] et les **modèles linéaires généralisés mixtes** avec effet aléatoire par individu, que Zimmerman et al. jugent plus puissants que le pseudobulk, qu'ils estiment conservateur.[^zimmerman] Détail : [[cours-scrnaseq-inference-selective]], section 3.6.
 
-En notant $\hat C_1,\hat C_2$ deux clusters produits par l'algorithme appliqué aux données $X$, l'hypothèse testée est :
-
-$$H_0 : \mu_{\hat C_1}=\mu_{\hat C_2},$$
-
-et la garantie visée prend la forme sélective de la section 4.1, c'est-à-dire un contrôle de $P(\text{rejeter } H_0 \mid \hat C_1,\hat C_2 \text{ ont été obtenus par l'algorithme})$ (adaptation de [^fithian] au cadre de [^gao] ; la formulation exacte est à vérifier dans l'article). Pour k-means, Chen et Witten construisent une p-value qui conditionne sur toutes les affectations intermédiaires de l'algorithme et contrôle l'erreur de type I sélective en échantillon fini.[^chen]
-
-> [!warning] Ce que ce cours ne reproduit pas
-> La formule de la p-value sélective (statistique conditionnée à l'événement de clustering, loi tronquée) n'est pas donnée ici : seuls les résumés de [^gao] ont pu être lus. Sa lecture complète est l'étape suivante pour la suite du travail.
-
-### 4.3 Illustration par simulation : du bruit pur, deux clusters, un test classique
-
-> [!example] Simulation réalisée pour ce cours (non sourcée : voir annexe)
-> **Protocole.** 100 « cellules » et 10 « gènes », tous tirés indépendamment dans une loi normale centrée réduite : **aucune structure**, donc toute différence de moyenne entre groupes est nulle. Clustering hiérarchique (liaison de Ward) coupé en 2 clusters ; test t classique sur un gène choisi au hasard, entre les deux clusters. 5 000 répétitions. Témoin : le même test avec 2 groupes tirés au hasard avant de voir les données.
+> [!question]- Exercice 4 : multiplier les cellules aide-t-il ?
+> Dans la simulation précédente, passer de 100 à 10 000 cellules par individu améliorerait-il la validité du test « une cellule = une observation » ?
 >
-> | Situation | Rejets à $\alpha=0{,}05$ | Rejets à $\alpha=0{,}001$ |
-> |---|---|---|
-> | Groupes fixés à l'avance (aléatoires) | **4,6 %** | |
-> | Groupes obtenus par clustering | **52,1 %** | **27,6 %** |
->
-> Un test nominal à 5 % rejette donc à tort dans plus d'un cas sur deux après clustering, et un test nominal à 0,1 % dans plus d'un quart des cas.
+> **Correction (raisonnement à partir de la simulation, non sourcé).** Non, la situation empire. Le niveau moyen de chaque individu est fixé par son effet individuel : ajouter des cellules précise la moyenne de *cet* individu, mais n'ajoute aucun individu. Le test, lui, croit disposer de bien plus d'information indépendante qu'en réalité, et ses p-values deviennent encore plus petites. Seul le nombre d'**individus** protège.
+
+> [!tip] À retenir de la leçon 5
+> - Des cellules d'un même individu ne sont pas indépendantes (condition C2).
+> - Les traiter comme indépendantes gonfle l'erreur de type I (79,6 % de rejets à tort dans la simulation).
+> - L'unité statistique est l'individu : pseudobulk ou modèle mixte.
+
+---
+
+## Leçon 6 : choisir l'hypothèse après avoir vu les données (le double dipping)
+
+> [!abstract] Objectif
+> Comprendre pourquoi un test réalisé **après un clustering, sur les mêmes données**, ne respecte pas son niveau, et ce que veut dire « erreur de type I sélective ». C'est la leçon directement liée au sujet de l'inférence sélective pour le clustering hiérarchique.
+
+### 6.1 L'intuition
+
+> [!example] Analogie (non sourcée)
+> Tirer une flèche sur un mur, puis dessiner la cible autour de l'impact, puis annoncer : « en plein centre ! ». La cible a été choisie **après** le tir : le test « la flèche est au centre » est gagné d'avance.
+
+En single-cell, le clustering joue le rôle de la cible : il cherche, parmi les cellules, des groupes aussi séparés que possible. Tester ensuite que ces groupes diffèrent revient à constater ce que l'algorithme a lui-même fabriqué.
+
+### 6.2 La définition
+
+Le *double dipping* est l'utilisation d'un même jeu de données pour **sélectionner** puis pour **analyser le sous-ensemble sélectionné**. Il rend l'inférence invalide dès que les statistiques de test ne sont pas indépendantes du critère de sélection sous $H_0$.[^kriegeskorte] Deux illustrations de la littérature :
+
+- Dans une simulation où une région d'intérêt est choisie à partir des données, un test censé donner une différence nulle est significatif dans 20 répétitions sur 100 à $p<0{,}05$, et dans 9 sur 100 à $p<0{,}01$ : bien au-dessus du niveau nominal.[^kriegeskorte]
+- Dans l'« effet tiroir », un test au niveau nominal 0,05 appliqué seulement aux effets sélectionnés parce qu'ils sont grands a un taux de rejet à tort d'environ 0,16 parmi les hypothèses nulles vraies effectivement testées.[^fithian]
+
+### 6.3 Expérience : clustering de bruit pur
+
+*(Simulation réalisée pour ce cours.)* 100 « cellules » et 10 « gènes », tous tirés indépendamment dans une loi normale centrée réduite : **aucune structure** ; toute différence de moyenne entre deux groupes est nulle. Le clustering hiérarchique (liaison de Ward) est coupé en 2 clusters. Un gène est choisi au hasard et un test t classique compare ses valeurs entre les deux clusters. Témoin : le même test avec 2 groupes tirés au hasard **avant** de voir les données. 5 000 répétitions.
+
+| Situation | Rejets à $\alpha=0{,}05$ | Rejets à $\alpha=0{,}001$ |
+|---|---|---|
+| Groupes fixés à l'avance (aléatoires) | **4,6 %** | |
+| Groupes obtenus par clustering | **52,1 %** | **27,6 %** |
 
 <div style="text-align:center">
 <svg style="max-width:100%;height:auto" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 792 259.2" xmlns="http://www.w3.org/2000/svg" version="1.1">
@@ -8196,128 +11642,147 @@ L 777.700257 209.700859
 </svg>
 </div>
 
-*Figure 4 : simulation pour ce cours. À gauche, un jeu de bruit pur coupé en deux « clusters ». Au centre, p-values avec groupes fixés à l'avance (uniformes). À droite, p-values après clustering : accumulation près de 0.*
+*Figure 6 : à gauche, un jeu de bruit pur coupé en deux « clusters ». Au centre, p-values avec groupes fixés à l'avance (uniformes). À droite, p-values après clustering : accumulation près de 0.*
+
+Un test nominal à 5 % rejette donc à tort plus d'une fois sur deux, et un test nominal à 0,1 % plus d'une fois sur quatre. Le mécanisme est celui décrit dans la littérature : le clustering force la séparation entre groupes, et réutiliser les mêmes données produit des p-values artificiellement basses.[^zhang]
 
 ```mermaid
 flowchart LR
-    N["Bruit pur<br/>aucune différence réelle"] --> C["Clustering :<br/>deux groupes forcément<br/>séparés au mieux"]
+    N["Bruit pur<br/>aucune différence réelle"] --> C["Clustering :<br/>deux groupes aussi séparés<br/>que possible"]
     C --> T["Test t classique<br/>entre ces deux groupes"]
     T --> P["p-values trop petites :<br/>52 % de rejets à 5 %"]
 ```
 
-> [!note] Portée et limites de l'expérience
-> Cette simulation est un cas simple (un seul test, un gène pris au hasard, liaison de Ward, $K=2$). Elle n'est **pas** une reproduction des simulations de Gao et al., dont les résultats chiffrés n'ont pas été lus. Elle illustre le mécanisme décrit dans les sources : le clustering force la séparation entre groupes, et réutiliser les données donne des p-values artificiellement basses.[^zhang] Les chiffres exacts dépendent de la taille d'échantillon, de la dimension et de la liaison choisie.
+> [!note] Portée de l'expérience
+> Cas simple (un seul test, un gène au hasard, liaison de Ward, 2 clusters). Ce n'est **pas** une reproduction des simulations de Gao, Bien et Witten, dont les chiffres n'ont pas été lus. Les valeurs exactes dépendent de la taille d'échantillon, de la dimension et de la liaison.
 
-### 4.4 Pourquoi couper les données en deux ne règle pas toujours le problème
+### 6.4 La garantie sélective
 
-Deux sources apportent des nuances à ne pas confondre :
+Fithian, Sun et Taylor formulent l'exigence ainsi : la réponse doit être valide **étant donné que la question a été posée**.[^fithian] Avec $(M,H_0)$ le couple *modèle, hypothèse* choisi à partir des données, les deux garanties sont (écriture adaptée de [^fithian]) :
 
-- Le découpage de l'échantillon satisfait la garantie sélective quand la sélection est réellement indépendante des données de test.[^fithian] 
-- Dans le cadre du clustering, Gao et al. indiquent que le problème persiste même avec un jeu de données indépendant pour former les clusters et un autre pour tester,[^gao] et Neufeld et al. notent que les approches de découpage d'échantillon ne s'appliquent pas au contexte du scRNA-seq.[^neufeld]
+$$\underbrace{P_{M,H_0}\big(\text{rejeter } H_0\big)\le\alpha}_{\text{classique : sans tenir compte de la sélection}}\qquad\qquad
+\underbrace{P_{M,H_0}\big(\text{rejeter } H_0\,\big|\,(M,H_0)\text{ a été sélectionné}\big)\le\alpha}_{\text{sélective : conditionnelle à la sélection}}$$
 
-La conciliation exacte de ces deux énoncés (quelle indépendance, sous quelle modélisation) relève du texte intégral des articles, non lu ici.
+La différence tient au **conditionnement** : le contrôle sélectif vaut parmi les cas où la question a effectivement été posée.[^fithian] Lorsque la sélection est indépendante des données utilisées pour l'inférence, les deux garanties coïncident ; le découpage des données en est un cas particulier.[^fithian]
 
-### 4.5 Les solutions publiées pour le test après clustering
+```mermaid
+flowchart TB
+    subgraph CL["Cadre classique"]
+        direction TB
+        a1["Hypothèse fixée<br/>avant les données"] --> a2["Loi de la statistique<br/>sous H0 connue"] --> a3["P(rejeter | H0) ≤ α"]
+    end
+    subgraph SE["Cadre sélectif"]
+        direction TB
+        b1["Hypothèse choisie<br/>à partir des données"] --> b2["Loi sous H0<br/>conditionnelle à la sélection"] --> b3["P(rejeter | H0, sélection) ≤ α"]
+    end
+```
+
+### 6.5 Application au clustering hiérarchique
+
+Soit $X$ la matrice de données et $\hat C_1,\hat C_2$ deux clusters **produits par l'algorithme appliqué à $X$**. L'hypothèse à tester est :
+
+$$H_0:\ \mu_{\hat C_1}=\mu_{\hat C_2}.$$
+
+Gao, Bien et Witten établissent que les tests classiques de différence de moyennes gardent leur erreur de type I quand les groupes sont spécifiés à l'avance, mais produisent un taux de faux positifs très supérieur quand les groupes sont formés par clustering des mêmes données. Leur méthode contrôle l'**erreur de type I sélective** en tenant compte du fait que l'hypothèse nulle a été choisie à partir des données, et fournit des p-values exactes pour le clustering agglomératif avec plusieurs critères de liaison courants.[^gao] Pour k-means, Chen et Witten construisent une p-value qui conditionne sur toutes les affectations intermédiaires de l'algorithme et contrôle l'erreur de type I sélective en échantillon fini.[^chen]
+
+La garantie visée prend la forme sélective ci-dessus : contrôler $P(\text{rejeter } H_0\mid \hat C_1,\hat C_2\text{ ont été obtenus par l'algorithme})$. *(Adaptation de [^fithian] au cadre de [^gao] ; la formulation exacte est à vérifier dans l'article.)*
+
+> [!warning] Pourquoi couper les données en deux ne suffit pas toujours
+> Le découpage de l'échantillon satisfait la garantie sélective quand la sélection est réellement indépendante des données de test.[^fithian] Mais Gao et al. indiquent que, pour le clustering, le problème persiste même avec un jeu de données indépendant pour former les clusters et un autre pour tester,[^gao] et Neufeld et al. que le découpage d'échantillon ne s'applique pas au contexte du scRNA-seq.[^neufeld] La conciliation exacte de ces énoncés relève du texte intégral des articles, non lu ici.
+
+### 6.6 Les solutions publiées
 
 | Approche | Idée centrale | Source |
 |---|---|---|
-| **Inférence sélective, clustering hiérarchique** | Tester la différence de moyennes entre deux clusters en tenant compte du choix des clusters ; p-values exactes pour le clustering agglomératif ; appliquée à des données de scRNA-seq | Gao, Bien, Witten[^gao] |
-| **Inférence sélective, k-means** | Même objectif pour k-means ; p-value conditionnant sur les affectations intermédiaires ; contrôle sélectif en échantillon fini | Chen, Witten[^chen] |
-| **Count splitting** | Séparer les comptages en deux parties : clustering sur l'une, test sur l'autre ; valable sous une hypothèse de loi de Poisson, puis étendu à la loi binomiale négative | Neufeld et al.[^neufeld] |
+| **Inférence sélective, clustering hiérarchique** | Tester la différence de moyennes entre deux clusters en tenant compte de leur choix ; p-values exactes pour le clustering agglomératif ; appliquée au scRNA-seq | Gao, Bien, Witten[^gao] |
+| **Inférence sélective, k-means** | Même objectif pour k-means ; conditionne sur les affectations intermédiaires | Chen, Witten[^chen] |
+| **Count splitting** | Séparer les comptages en deux parties : clustering sur l'une, test sur l'autre ; valable sous une loi de Poisson, puis étendu à la binomiale négative | Neufeld et al.[^neufeld] |
 | **Data thinning** | Séparer une observation en parties indépendantes dont la somme redonne l'observation, pour les lois stables par convolution | Neufeld, Dharamshi, Gao, Witten[^thinning] |
-| **Test conditionnel à l'hyperplan** | Conditionner sur l'événement de clustering à l'aide de l'hyperplan séparateur, avec une étape de découpage des données | Zhang, Kamath, Tse[^zhang] |
-| **ClusterDE** | Méthode post-clustering visant à contrôler le FDR des gènes différentiels, présentée comme robuste à l'inflation due au double dipping | Présentation de séminaire[^clusterde] |
+| **Test conditionnel à l'hyperplan** | Conditionner sur l'événement de clustering via l'hyperplan séparateur, avec une étape de découpage des données | Zhang, Kamath, Tse[^zhang] |
+| **ClusterDE** | Contrôle du FDR des gènes différentiels après clustering | Présentation de séminaire[^clusterde] |
 
-> [!tip] À retenir de la section 4
-> - L'erreur de type I **sélective** est la probabilité de rejeter à tort **sachant que** l'hypothèse a été choisie à partir des données.[^fithian]
-> - Pour deux clusters estimés sur les mêmes données, le test classique de différence de moyennes ne contrôle pas l'erreur de type I ; l'inférence sélective y remédie.[^gao]
-> - La simulation de la section 4.3 en donne l'ordre de grandeur sur un cas simple : environ 52 % de rejets à un niveau nominal de 5 %.
+> [!question]- Exercice 5 : pourquoi le test sur groupes aléatoires est-il valide ?
+> Dans l'expérience 6.3, le test sur groupes tirés au hasard rejette 4,6 % du temps (≈ 5 %), alors que le test après clustering rejette 52,1 % du temps. Pourquoi ?
+>
+> **Correction.** Les groupes aléatoires sont définis **indépendamment des données** : la condition C3 est respectée, la p-value est uniforme sous $H_0$ (leçon 2). Les groupes du clustering sont construits **à partir des données** pour être séparés ; la statistique de test n'est plus indépendante du critère de sélection, et la garantie classique ne s'applique plus.[^kriegeskorte]
+
+> [!tip] À retenir de la leçon 6
+> - Double dipping : sélectionner puis tester sur les mêmes données.
+> - Le test classique après clustering de **bruit pur** rejette à tort 52 % du temps à un niveau nominal de 5 % (simulation).
+> - L'erreur de type I **sélective** est la probabilité de rejeter à tort *sachant que* l'hypothèse a été choisie à partir des données ; l'inférence sélective de Gao, Bien et Witten la contrôle pour le clustering hiérarchique.
 
 ---
 
-## 5. Récapitulatif : problème, cause, remède
+## Leçon 7 : synthèse
 
-| Situation | Pourquoi l'erreur de type I dérape | Remède publié | Source |
-|---|---|---|---|
-| Des milliers de gènes testés | Environ $m\alpha$ faux positifs sous $H_0$ | Bonferroni (FWER), Benjamini–Hochberg (FDR) | [^cmu][^bh] |
-| Cellules d'un même individu | Observations dépendantes traitées comme indépendantes | Pseudobulk, modèles mixtes | [^squair][^zimmerman] |
-| Clustering puis test sur les mêmes données | L'hypothèse est choisie par les données ; le clustering force la séparation | Inférence sélective, count splitting, data thinning | [^gao][^chen][^neufeld][^thinning] |
-| Beaucoup d'analyses possibles, peu de vrais effets | Probabilité a priori faible, flexibilité | Transparence, réplication, échantillons plus grands | [^ioannidis][^asa] |
+### 7.1 Une table pour tout reprendre
+
+| Condition violée | Mécanisme | Effet sur l'erreur de type I | Remède publié | Leçon |
+|---|---|---|---|---|
+| C1 : un seul test | Milliers de tests simultanés | ≈ $m\alpha$ faux positifs[^cmu] | Bonferroni (FWER), BH (FDR)[^bh] | 4 |
+| C2 : indépendance | Cellules d'un même individu | 79,6 % de rejets à 5 % (simulation) ; inflation documentée[^zimmerman] | Pseudobulk, modèles mixtes[^squair][^zimmerman] | 5 |
+| C3 : hypothèse fixée à l'avance | Clustering puis test sur les mêmes données | 52,1 % de rejets à 5 % (simulation) ; inflation documentée[^gao] | Inférence sélective, count splitting, data thinning[^gao][^neufeld][^thinning] | 6 |
 
 ```mermaid
 flowchart TB
     Q{"Quelle est la source<br/>du faux positif ?"} -->|"beaucoup de tests"| A["Correction multiple<br/>Bonferroni ou BH"]
-    Q -->|"observations corrélées"| B["Modèle tenant compte<br/>de la dépendance"]
+    Q -->|"cellules corrélées"| B["Unité = individu<br/>pseudobulk ou modèle mixte"]
     Q -->|"hypothèse choisie<br/>par les données"| C["Inférence sélective<br/>ou découpage adapté"]
-    Q -->|"analyses flexibles"| D["Transparence,<br/>pré-enregistrement, réplication"]
 ```
 
-*(Le dernier remède, « pré-enregistrement », est un rapprochement pédagogique : les sources lues citent la transparence et le compte rendu complet.[^asa][^ioannidis])*
+### 7.2 Prolongement : α n'est pas la proportion de résultats faux
 
----
+Même avec toutes les conditions respectées, un résultat « significatif » à 5 % n'est pas faux dans 5 % des cas. Avec $\alpha$ le niveau, $1-\beta$ la puissance et $R$ le rapport entre relations vraies et relations nulles parmi celles testées, la **valeur prédictive positive** (probabilité qu'un résultat significatif soit vrai), sans biais, vaut :[^ioannidis]
 
-## 6. Pièges d'interprétation
+$$\mathrm{PPV}=\frac{(1-\beta)\,R}{R-\beta R+\alpha}.$$
 
-| Énoncé fautif | Pourquoi il est faux | Source |
+Un résultat est plus souvent vrai que faux lorsque $(1-\beta)R>\alpha$.[^ioannidis] Ioannidis relie ce constat à des champs où beaucoup de relations sont testées, avec peu de présélection et une grande flexibilité d'analyse.[^ioannidis]
+
+*(Calcul réalisé pour ce cours à partir de la formule, α = 0,05, sans biais.)*
+
+| $R$ (relations vraies / nulles) | PPV, puissance 80 % | PPV, puissance 20 % |
 |---|---|---|
-| « $p=0{,}03$ signifie 3 % de chances que $H_0$ soit vraie » | La p-value est calculée en supposant $H_0$ vraie ; elle ne mesure pas la probabilité d'une hypothèse | [^asa][^schneider] |
-| « Résultat non significatif, donc $H_0$ est vraie » | Un résultat non significatif suspend le jugement (Fisher) ; accepter n'est pas démontrer | [^schneider][^asa] |
-| « $p<0{,}05$, donc l'effet est important » | La significativité ne mesure ni la taille ni l'importance d'un effet | [^asa] |
-| « Seuil de 5 %, donc 95 % des résultats significatifs sont vrais » | Cela dépend de la puissance et de la probabilité a priori | [^ioannidis] |
-| « Le niveau nominal est garanti après sélection par les données » | La garantie classique suppose une hypothèse fixée à l'avance | [^fithian][^gao] |
+| 1 | 0,94 | 0,80 |
+| 0,1 | 0,62 | 0,29 |
+| 0,01 | 0,14 | 0,04 |
+| 0,001 | 0,016 | 0,004 |
+
+Avec le même α, la fiabilité d'un résultat « significatif » varie énormément selon le contexte : α borne la probabilité de rejeter à tort **sous $H_0$** ; il ne dit pas quelle proportion des résultats significatifs est fausse (cohérent avec le principe 2 de l'ASA[^asa]).
+
+### 7.3 Fiche mémo
+
+| Notion | À retenir |
+|---|---|
+| Erreur de type I | Rejeter $H_0$ vraie ; probabilité α, fixée à l'avance |
+| Erreur de type II / puissance | β ; puissance $1-\beta$ ; β baisse quand l'échantillon grandit |
+| p-value | Probabilité, sous $H_0$, d'un résultat au moins aussi extrême ; uniforme sous $H_0$ |
+| Garantie α | Vraie si : un test, observations indépendantes, hypothèse fixée avant les données |
+| FWER / FDR | Au moins un faux positif / proportion de faux positifs parmi les rejets |
+| Pseudoréplication | Cellules corrélées traitées comme indépendantes : l'unité est l'individu |
+| Double dipping | Sélectionner puis tester sur les mêmes données |
+| Erreur de type I sélective | $P(\text{rejeter}\mid\text{sélection})\le\alpha$ : valide étant donné que la question a été posée |
 
 ---
 
-## 7. Questions de révision
-
-> [!question]- 1. Quelle est la différence entre erreur de type I et erreur de type II ?
-> Type I : rejeter $H_0$ alors qu'elle est vraie (faux positif, probabilité $\alpha$). Type II : ne pas rejeter $H_0$ alors qu'elle est fausse (faux négatif, probabilité $\beta$).[^libretexts][^np1933]
-
-> [!question]- 2. Pourquoi, sous $H_0$, le test « rejeter si p ≤ 0,05 » se trompe-t-il dans 5 % des cas ?
-> Parce que la p-value est uniformément distribuée sous $H_0$ lorsque la loi de la statistique est connue.[^wicklin]
-
-> [!question]- 3. Pourquoi la p-value n'est-elle pas la probabilité que $H_0$ soit vraie ?
-> Elle est calculée sous l'hypothèse $H_0$ : c'est la probabilité d'un résumé des données au moins aussi extrême, sous un modèle spécifié.[^asa]
-
-> [!question]- 4. Combien de faux positifs attendre avec 10 000 tests au seuil de 0,05 si aucune hypothèse alternative n'est vraie ?
-> Environ 500, soit $m\alpha$.[^cmu] La simulation de la section 3.1 en a donné 464 sur une répétition.
-
-> [!question]- 5. Quelle est la différence entre FWER et FDR ?
-> FWER : probabilité d'au moins un faux positif. FDR : espérance de la proportion de faux positifs parmi les rejets. La FDR est le critère le moins strict.[^bh][^cmu]
-
-> [!question]- 6. Qu'est-ce que le double dipping ?
-> L'utilisation d'un même jeu de données pour sélectionner puis pour analyser le sous-ensemble sélectionné ; il rend l'inférence invalide lorsque les statistiques de test ne sont pas indépendantes du critère de sélection sous $H_0$.[^kriegeskorte]
-
-> [!question]- 7. Quelle est la différence entre erreur de type I classique et sélective ?
-> La classique ne tient pas compte de la sélection : $P(\text{rejeter})\le\alpha$. La sélective est conditionnelle à la sélection du couple modèle-hypothèse : $P(\text{rejeter} \mid \text{sélection})\le\alpha$.[^fithian]
-
-> [!question]- 8. Dans la simulation de la section 4.3, pourquoi le test rejette-t-il à tort plus d'une fois sur deux ?
-> Parce que le clustering a créé deux groupes les plus séparés possible sur les données, puis que le test classique, construit pour des groupes fixés à l'avance, a été appliqué à ces mêmes données. Mécanisme décrit dans [^zhang] et [^gao].
-
-> [!question]- 9. Pourquoi le découpage de l'échantillon n'est-il pas la solution retenue dans la littérature sur le scRNA-seq ?
-> Gao et al. rapportent que le problème persiste avec des jeux indépendants, et Neufeld et al. que le découpage d'échantillon ne s'applique pas dans ce contexte, d'où le count splitting.[^gao][^neufeld] La conciliation précise avec le résultat de Fithian et al. est à vérifier dans les textes intégraux.
-
----
-
-## 8. Limites et vérifications
+## Limites et vérifications
 
 > [!warning] Ce que ce cours ne garantit pas
-> - **Degré de lecture des sources.** Neyman–Pearson (1933), Wasserstein–Lazar (2016), Benjamini–Hochberg (1995), Kriegeskorte et al. (2009), Fithian et al. (arXiv), Ioannidis (2005) et Schneider (arXiv) ont été lus par extraits ou résumés détaillés, pas intégralement. Pour **Gao–Bien–Witten**, seuls le résumé et les métadonnées ont été lus ; pour **Noble (2009)**, seul le résumé. Les articles de Biau et al. (PMC) et la version PMC de Kriegeskorte étaient derrière un test anti-robot, non contourné ; une copie de l'auteur de Kriegeskorte a été utilisée (lecture interrompue avant la fin de la section de questions-réponses).
-> - **Sources secondaires.** Les formules de Bonferroni et de Benjamini–Hochberg proviennent pour partie d'un résumé de club de lecture de l'université Carnegie Mellon[^cmu], recoupé avec les extraits de l'article original.[^bh] Les définitions de base reposent sur un manuel ouvert (LibreTexts) et sur l'article de Neyman et Pearson. Le billet de Wicklin est un blog technique, non évalué par des pairs. La présentation de ClusterDE est un résumé de séminaire.
+> - **Degré de lecture des sources.** Neyman–Pearson (1933), Wasserstein–Lazar (2016), Benjamini–Hochberg (1995), Kriegeskorte et al. (2009), Fithian et al. (arXiv), Ioannidis (2005) et Schneider (arXiv) ont été lus par extraits ou résumés détaillés, pas intégralement. Pour **Gao–Bien–Witten**, seuls le résumé et les métadonnées ont été lus ; pour **Noble (2009)**, seul le résumé. Les pages PMC protégées par un test anti-robot n'ont pas été contournées ; une copie de l'auteur de Kriegeskorte a servi (lecture interrompue avant la fin de la section de questions-réponses).
+> - **Sources secondaires.** Les formules de Bonferroni et de Benjamini–Hochberg proviennent en partie d'un résumé de club de lecture (Carnegie Mellon)[^cmu], recoupé avec les extraits de l'article original.[^bh] Les définitions de base reposent sur un manuel ouvert (LibreTexts) et sur Neyman et Pearson. Le billet de Wicklin est un blog technique non évalué par des pairs. ClusterDE n'est connu ici que par un résumé de séminaire.
 > - **Préprints.** Fithian et al., Neufeld et al. et Schneider sont cités à partir de versions arXiv ; Zhang, Kamath et Tse à partir d'un préprint bioRxiv.
-> - **Simulations.** Les figures 1 à 4, les chiffres des sections 2.3, 3.1, 3.4 (tableau) et 4.3 sont des **expériences numériques réalisées pour ce cours** (graine fixée, code en annexe). Elles illustrent les sources, elles n'en sont pas des résultats. Les nombres de répétitions sont modestes pour le scénario multiple (100), d'où des estimations bruitées (par exemple 6 % au lieu de 5 %).
-> - **Schémas Mermaid et analogies** : pédagogiques, non sourcés.
-> - **Non couvert** : la formule de la p-value sélective, les tests unilatéraux ou bilatéraux, les tests de permutation, les erreurs de type S et M, les approches bayésiennes, les procédures de correction sous dépendance (Benjamini–Yekutieli), le calcul de taille d'échantillon.
-> - **Point à vérifier** : l'écriture de la garantie sélective pour le clustering hiérarchique (section 4.2) est une adaptation de Fithian et al. à Gao et al., à confirmer dans l'article.
+> - **Calculs et simulations.** Les calculs binomiaux, l'exemple de Benjamini–Hochberg (p-values fictives), les figures 1 à 6 et les tableaux chiffrés des leçons 4, 5, 6 et 7.2 ont été réalisés pour ce cours (graines fixées, code en annexe). Ils illustrent les sources, ils n'en sont pas des résultats. Les estimations du scénario multiple reposent sur 100 répétitions seulement (d'où des valeurs comme 6 % au lieu de 5 %).
+> - **Analogies et schémas.** La flèche et la cible, le sondage dans une famille, les schémas Mermaid et la liste des conditions C1 à C4 sont pédagogiques et non sourcés.
+> - **Point à vérifier.** L'écriture de la garantie sélective pour le clustering hiérarchique (6.5) est une adaptation de Fithian et al. à Gao et al., à confirmer dans l'article. La conciliation entre le découpage de l'échantillon (Fithian) et le résultat de Gao et al. et Neufeld et al. n'a pas été éclaircie.
+> - **Non couvert.** La formule de la p-value sélective, les tests bilatéraux, les tests de permutation, les erreurs de type S et M, les approches bayésiennes, les corrections sous dépendance (Benjamini–Yekutieli), le calcul de taille d'échantillon.
 
 > [!todo] Suite logique
-> Lire en entier Gao–Bien–Witten (arXiv:2012.02936), notamment la définition de l'erreur de type I sélective et la section de simulation, puis Chen–Witten.[^gao][^chen] Comparer ensuite leurs chiffres à ceux de la simulation de la section 4.3.
+> Lire en entier Gao–Bien–Witten (arXiv:2012.02936), notamment la définition de l'erreur de type I sélective et la section de simulation, puis Chen–Witten. Comparer ensuite leurs chiffres à ceux de l'expérience 6.3.[^gao][^chen]
 
 ---
 
-## Annexe : code des simulations
+## Annexe : code des calculs et simulations
 
-> [!example]- Code Python complet (numpy, scipy, matplotlib), graine fixée
+> [!example]- Code Python 1 : p-values sous H0, tests multiples, double dipping, schéma α/β, PPV
 > ```python
 > """Simulations illustratives pour le cours sur l'erreur de type I.
 >
@@ -8527,6 +11992,112 @@ flowchart TB
 > sim_double_dipping()
 > ppv_table()
 > (OUT / "results.json").write_text(json.dumps(res, indent=2, ensure_ascii=False))
+> print(json.dumps(res, indent=2, ensure_ascii=False))
+> ```
+
+> [!example]- Code Python 2 : pièce de monnaie (calcul exact), exemple BH, cellules imbriquées
+> ```python
+> """Compléments pour le cours sur l'erreur de type I : pièce de monnaie (calcul exact),
+> exemple de Benjamini–Hochberg à la main, cellules imbriquées dans des individus.
+> Graine fixée : résultats reproductibles. Sorties : figures SVG + results2.json.
+> """
+> import json
+> import sys
+> from pathlib import Path
+>
+> import matplotlib
+> matplotlib.use("Agg")
+> import matplotlib.pyplot as plt
+> import numpy as np
+> from scipy import stats
+>
+> OUT = Path(sys.argv[1])
+> OUT.mkdir(parents=True, exist_ok=True)
+> rng = np.random.default_rng(2027)
+> plt.rcParams.update({"svg.fonttype": "path", "font.size": 11, "axes.spines.top": False,
+>                      "axes.spines.right": False, "figure.facecolor": "white", "axes.facecolor": "white"})
+> BLUE, ORANGE, GREY, RED, GREEN = "#2b6cb0", "#dd6b20", "#718096", "#c53030", "#2f855a"
+> res = {}
+>
+> # ------------------------------------------------------------ 1. pièce de monnaie (calcul exact)
+> n, p0, p1 = 10, 0.5, 0.8
+> rows = []
+> for k in (7, 8, 9, 10):
+>     alpha = float(stats.binom.sf(k - 1, n, p0))          # P(X >= k | p = 0,5)
+>     power = float(stats.binom.sf(k - 1, n, p1))          # P(X >= k | p = 0,8)
+>     rows.append({"seuil_k": k, "alpha": alpha, "power": power, "beta": 1 - power})
+> res["coin_n10"] = rows
+> # observation 9 faces sur 10 : p-value unilatérale
+> res["coin_pvalue_9_of_10"] = float(stats.binom.sf(8, n, p0))
+> # même règle avec 100 lancers : plus petit k tel que alpha <= 0,05
+> n2 = 100
+> k2 = int(min(k for k in range(n2 + 1) if stats.binom.sf(k - 1, n2, p0) <= 0.05))
+> res["coin_n100"] = {"n": n2, "seuil_k": k2, "alpha": float(stats.binom.sf(k2 - 1, n2, p0)),
+>                     "power_p0.6": float(stats.binom.sf(k2 - 1, n2, 0.6)),
+>                     "power_p0.8": float(stats.binom.sf(k2 - 1, n2, 0.8))}
+> res["coin_n10_best_k_alpha_le_0.05"] = int(min(k for k in range(n + 1) if stats.binom.sf(k - 1, n, p0) <= 0.05))
+>
+> x = np.arange(0, n + 1)
+> fig, axs = plt.subplots(2, 1, figsize=(8, 5.4), sharex=True)
+> k = 8
+> cols0 = [RED if xi >= k else BLUE for xi in x]
+> axs[0].bar(x, stats.binom.pmf(x, n, p0), color=cols0, edgecolor="white")
+> axs[0].set_title(f"Pièce équilibrée ($H_0$ : p = 0,5) : règle « rejeter si au moins {k} faces »", fontsize=10.5)
+> axs[0].text(8.0, 0.2, f"aire rouge = α = {stats.binom.sf(k-1, n, p0):.3f}".replace(".", ","), color=RED, fontsize=10)
+> cols1 = [GREY if xi < k else GREEN for xi in x]
+> axs[1].bar(x, stats.binom.pmf(x, n, p1), color=cols1, edgecolor="white")
+> axs[1].set_title("Pièce biaisée (p = 0,8) : le test rate le biais quand le nombre de faces reste sous le seuil", fontsize=10.5)
+> axs[1].text(0.2, 0.26, f"aire grise = β = {stats.binom.cdf(k-1, n, p1):.3f}".replace(".", ","), color=GREY, fontsize=10)
+> axs[1].set_xlabel("Nombre de faces sur 10 lancers")
+> axs[1].set_xticks(x)
+> for a in axs:
+>     a.set_ylabel("Probabilité")
+> fig.tight_layout()
+> fig.savefig(OUT / "fig_coin.svg")
+> plt.close(fig)
+>
+> # ------------------------------------------------------------ 2. Benjamini–Hochberg à la main
+> pv = np.array([0.001, 0.008, 0.012, 0.030, 0.041, 0.200, 0.450, 0.830])
+> m, q = len(pv), 0.05
+> thr = np.arange(1, m + 1) / m * q
+> ok = pv <= thr
+> k_bh = int(np.nonzero(ok)[0].max() + 1) if ok.any() else 0
+> res["bh_example"] = {"p": pv.tolist(), "thresholds_k_over_m_q": thr.tolist(), "p_le_threshold": ok.tolist(),
+>                      "k_star": k_bh, "rejected_BH": k_bh, "bonferroni_threshold": q / m,
+>                      "rejected_bonferroni": int(np.sum(pv <= q / m)),
+>                      "rejected_uncorrected": int(np.sum(pv <= q))}
+>
+> # ------------------------------------------------------------ 3. cellules imbriquées dans des individus
+> def nested(reps=5000, n_ind=5, n_cells=100, sd_ind=1.0, sd_cell=1.0):
+>     p_cell, p_ind = [], []
+>     for _ in range(reps):
+>         groups = []
+>         for g in range(2):
+>             u = rng.normal(0, sd_ind, n_ind)                       # effet aléatoire individuel
+>             y = u[:, None] + rng.normal(0, sd_cell, (n_ind, n_cells))
+>             groups.append(y)                                      # aucune différence entre groupes
+>         a, b = groups
+>         p_cell.append(stats.ttest_ind(a.ravel(), b.ravel()).pvalue)
+>         p_ind.append(stats.ttest_ind(a.mean(1), b.mean(1)).pvalue)
+>     return np.array(p_cell), np.array(p_ind)
+>
+> pc, pi_ = nested()
+> res["nested"] = {"reps": 5000, "individus_par_groupe": 5, "cellules_par_individu": 100,
+>                  "sd_individu": 1.0, "sd_cellule": 1.0,
+>                  "reject_0.05_cells_as_independent": float(np.mean(pc < 0.05)),
+>                  "reject_0.05_individual_means": float(np.mean(pi_ < 0.05))}
+> fig, axs = plt.subplots(1, 2, figsize=(10, 3.5), sharey=False)
+> for ax, pv_, title, col in ((axs[0], pc, "Chaque cellule traitée comme indépendante", RED),
+>                             (axs[1], pi_, "Un point par individu (moyenne des cellules)", BLUE)):
+>     ax.hist(pv_, bins=20, range=(0, 1), color=col, edgecolor="white")
+>     ax.set_xlabel("p-value")
+>     ax.set_title(f"{title}\n{100*np.mean(pv_ < 0.05):.1f} % de p < 0,05".replace(".", ","), fontsize=10)
+> axs[0].set_ylabel("Nombre de simulations")
+> fig.tight_layout()
+> fig.savefig(OUT / "fig_nested.svg")
+> plt.close(fig)
+>
+> (OUT / "results2.json").write_text(json.dumps(res, indent=2, ensure_ascii=False))
 > print(json.dumps(res, indent=2, ensure_ascii=False))
 > ```
 
