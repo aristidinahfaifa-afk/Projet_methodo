@@ -3,5 +3,8 @@
   "obsidian-zotero-desktop-connector",
   "terminal",
   "colored-tags",
-  "obsidian-plugin-toc"
+  "obsidian-plugin-toc",
+  "quick-latex",
+  "obsidian-latex-environments",
+  "pseudocode-in-obs"
 ]

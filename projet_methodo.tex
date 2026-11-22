@@ -1,0 +1,205 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{graphicx}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{subcaption}
+\usepackage[margin=2.5cm]{geometry}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6em}
+
+% ---------------------------------------------------------------
+% Macros used below (copy them into your own preamble)
+% ---------------------------------------------------------------
+\newcommand{\C}{\mathcal{C}}                       % clustering algorithm
+\newcommand{\MN}{\mathcal{MN}}                     % matrix normal distribution
+\newcommand{\norm}[1]{\lVert #1 \rVert_2}          % Euclidean norm
+\newcommand{\Hzero}{H_0^{\{\hat{C}_1,\hat{C}_2\}}} % null hypothesis for a pair of clusters
+\newcommand{\Hone}{H_1^{\{\hat{C}_1,\hat{C}_2\}}}  % alternative hypothesis
+\DeclareMathOperator{\Prob}{\mathbb{P}}
+\DeclareMathOperator{\E}{\mathbb{E}}
+
+% Red mark for things still to complete
+\newcommand{\todo}[1]{{\color{red}\textbf{[TODO: #1]}}}
+
+\title{Selective inference for hierarchical clustering:\\ reading notes}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+%====================================================================
+\section{Context}
+%====================================================================
+
+\paragraph{Goal.}
+We want to define groups of observations using a clustering algorithm, and then to test whether there are differences between these groups, which are not defined a priori but estimated from the data. More precisely, we want to test for a difference in means between the estimated clusters while controlling the Type~I error rate.
+
+\paragraph{Problem.}
+Available tests do not properly account for the double use of the data, which invalidates the resulting inference.
+
+\paragraph{Solution.}
+The method proposed in the article~\cite{gao2024}.
+
+%====================================================================
+\section{Illustrating the issue}
+%====================================================================
+
+\subsection{Model and notation}
+
+To illustrate the issue, consider the following model for $n$ observations and $q$ features:
+\[
+  X \sim \MN_{n\times q}\bigl(\mu,\, I_n,\, \sigma^2 I_q\bigr),
+\]
+where $\mu \in \mathbb{R}^{n\times q}$ is unknown and $\sigma^2>0$ is known. Let $\mu_i$ and $X_i$ denote the $i$-th rows of $\mu$ and $X$. For a subset $G \subseteq \{1,2,\dots,n\}$, define
+\[
+  \bar{\mu}_G \coloneqq \frac{1}{|G|}\sum_{i\in G}\mu_i
+  \qquad\text{and}\qquad
+  \bar{X}_G \coloneqq \frac{1}{|G|}\sum_{i\in G}X_i ,
+\]
+and let $\bar{x}_G$ denote the realization of $\bar{X}_G$.
+
+\subsection{Procedure}
+
+Given a realization $x \in \mathbb{R}^{n\times q}$ of $X$:
+\begin{itemize}
+  \item apply a clustering algorithm $\C$ to $x$ to obtain $\C(x)$, a partition of $\{1,2,\dots,n\}$;
+  \item use $x$ to test, for a pair of clusters $\hat{C}_1,\hat{C}_2\in\C(x)$, the null hypothesis
+  \[
+    \Hzero:\ \bar{\mu}_{\hat{C}_1}=\bar{\mu}_{\hat{C}_2}
+    \qquad\text{versus}\qquad
+    \Hone:\ \bar{\mu}_{\hat{C}_1}\neq\bar{\mu}_{\hat{C}_2}.
+  \]
+\end{itemize}
+
+\subsection{A naive Wald test}
+
+Suppose that we simply apply a Wald test, with $p$-value
+\[
+  p \;=\; \Prob_{\Hzero}\Bigl(\norm{\bar{X}_{\hat{C}_1}-\bar{X}_{\hat{C}_2}}
+  \;\ge\; \norm{\bar{x}_{\hat{C}_1}-\bar{x}_{\hat{C}_2}}\Bigr),
+\]
+where, under $\Hzero$,
+\[
+  \norm{\bar{X}_{\hat{C}_1}-\bar{X}_{\hat{C}_2}}
+  \;\sim\; \sigma\sqrt{\frac{1}{|\hat{C}_1|}+\frac{1}{|\hat{C}_2|}}\;\chi_q .
+\]
+
+\paragraph{Issue.}
+Since we clustered $x$ to obtain $\C(x)$, we will observe substantial differences between the cluster means $\{\bar{x}_{\hat{C}_k}\}_{k=1}^{K}$, where $K=|\C(x)|$, even when there is no signal in the data (see Figure~\ref{fig:wald}(a)).
+
+In the $p$-value formula, the left-hand side follows a scaled $\chi_q$ distribution, but the right-hand side is not drawn from a scaled $\chi_q$ distribution, because $\hat{C}_1$ and $\hat{C}_2$ are functions of $x$.
+
+\medskip
+\noindent\fbox{\parbox{0.93\linewidth}{%
+  \textbf{Issue:} we used the data to select a null hypothesis to test.%
+}}
+\medskip
+
+Figure~\ref{fig:wald}(a)--(b) shows that the Wald test does not work.
+
+% ---- Figure to insert (your R figure) ---------------------------------
+\begin{figure}[ht]
+  \centering
+  \begin{subfigure}[b]{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{unnamed-chunk-2-1.png}
+    \caption{Clusters found in data with no signal}
+    \label{fig:data1}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{unnamed-chunk-3-1.png}
+    \caption{Behaviour of the Wald $p$-values}
+    \label{fig:wald1}
+  \end{subfigure}
+  \caption{Analysis of clusters and Wald test behaviour}
+  \label{fig:wald}
+\end{figure}
+
+% ---- Answer to the red question "Why?" --------------------------------
+\paragraph{Why does the Wald test fail?}
+A $p$-value is valid only if, under the null hypothesis, the observed statistic is a draw from the distribution used to compute it. Here this distribution is the scaled $\chi_q$ distribution above, which holds for two groups $\hat{C}_1,\hat{C}_2$ that are \emph{fixed} before the data are observed.
+
+In our case, however, $\hat{C}_1$ and $\hat{C}_2$ are obtained by clustering $x$ itself. A clustering algorithm looks for groups that are far apart from each other, so the observed statistic $\norm{\bar{x}_{\hat{C}_1}-\bar{x}_{\hat{C}_2}}$ tends to be much larger than a draw from $\sigma\sqrt{1/|\hat{C}_1|+1/|\hat{C}_2|}\;\chi_q$, even when there is no signal (all the rows of $\mu$ are equal, so that $\Hzero$ is true). The $p$-values are then too small and the null hypothesis is rejected much more often than the nominal level $\alpha$: the Type~I error rate is not controlled.
+
+\subsection{A first attempt: sample splitting}
+
+A possible solution is sample splitting: split the data into a training set and a test set, cluster the training set, and assign the test observations to the resulting clusters (Figure~\ref{fig:splitting}). Then apply the Wald test to the test set.
+
+\paragraph{Issue.}
+By assigning the test observations to clusters, we once again use the data to select a null hypothesis to test.
+
+\paragraph{Explanation.}
+The null hypothesis $\Hzero$ is a function of the test observations.
+
+% ---- Figure to insert (your R figure) ---------------------------------
+\begin{figure}[ht]
+  \centering
+  \begin{subfigure}[b]{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{unnamed-chunk-4-1.png}
+    \caption{Full dataset prior to splitting}
+    \label{fig:data}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{unnamed-chunk-4-2.png}
+    \caption{Training set: cluster identification}
+    \label{fig:training}
+  \end{subfigure}\vspace{0.5cm} % Espace vertical entre les deux lignes de figures
+
+  \begin{subfigure}[b]{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{unnamed-chunk-4-3.png}
+    \caption{Test set}
+    \label{fig:test}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{unnamed-chunk-4-4.png}
+    \caption{Wald}
+    \label{fig:wald}
+  \end{subfigure}
+
+  \caption{Sample splitting procedure}
+  \label{fig:splitting}
+\end{figure}
+% ---- Answer to the red question "Details. So what?" -------------------
+\paragraph{Details.}
+Let $x^{\text{train}}$ and $x^{\text{test}}$ be the two parts of the data. The clusters are built from $x^{\text{train}}$ only, but each test observation $x^{\text{test}}_j$ is then assigned to a cluster according to its own value (for instance, to the cluster whose training centroid is the closest). Let $\hat{C}^{\text{test}}_k$ denote the set of test observations assigned to cluster~$k$. These sets are functions of $x^{\text{test}}$, and so is the null hypothesis $\bar{\mu}_{\hat{C}^{\text{test}}_1}=\bar{\mu}_{\hat{C}^{\text{test}}_2}$ that we then test with the same $x^{\text{test}}$.
+
+\paragraph{So what?}
+The Wald test requires groups that are defined independently of the data being tested. Here, each test observation is placed in the group it is closest to, so the group means differ by construction. For example, take $q=1$ and test observations that are pure noise, $Z_j\sim\mathcal N(0,1)$, with training centroids $-c$ and $+c$ ($c>0$). Each $Z_j$ is then assigned according to its sign, and the two group means are
+\[
+  \E[Z\mid Z>0]=\sqrt{2/\pi}\approx 0.8
+  \qquad\text{and}\qquad
+  \E[Z\mid Z<0]=-\sqrt{2/\pi}\approx -0.8,
+\]
+although there is no signal at all. The gap between the group means does not shrink when the number of test observations grows, whereas the scale of the Wald statistic's null distribution does. Hence the test rejects with probability tending to one.
+
+Sample splitting removes the dependence between the clustering and the data used to build the clusters, but not the dependence between the \emph{assignment} of the test observations and the data used to test.
+
+%====================================================================
+\section{Solution: conditioning on the selection event}
+%====================================================================
+
+Since we choose to test $\Hzero:\ \bar{\mu}_{\hat{C}_1}=\bar{\mu}_{\hat{C}_2}$ because $\hat{C}_1,\hat{C}_2\in\C(x)$, we can account for this hypothesis selection procedure by defining a $p$-value that conditions on the event $\{\hat{C}_1,\hat{C}_2\in\C(X)\}$. This yields a correctly sized test.
+
+%====================================================================
+\begin{thebibliography}{9}
+\bibitem{gao2024}
+L.~L. Gao, J.~Bien, and D.~Witten.
+Selective inference for hierarchical clustering.
+\emph{Journal of the American Statistical Association}, 119(545):332--342, 2024.
+\end{thebibliography}
+
+\end{document}
