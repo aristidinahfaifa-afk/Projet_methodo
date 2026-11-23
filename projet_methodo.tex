@@ -192,7 +192,237 @@ Sample splitting removes the dependence between the clustering and the data used
 \section{Solution: conditioning on the selection event}
 %====================================================================
 
-Since we choose to test $\Hzero:\ \bar{\mu}_{\hat{C}_1}=\bar{\mu}_{\hat{C}_2}$ because $\hat{C}_1,\hat{C}_2\in\C(x)$, we can account for this hypothesis selection procedure by defining a $p$-value that conditions on the event $\{\hat{C}_1,\hat{C}_2\in\C(X)\}$. This yields a correctly sized test.
+Since we choose to test $\Hzero:\ \bar{\mu}_{\hat{C}_1}=\bar{\mu}_{\hat{C}_2}$ because $\hat{C}_1,\hat{C}_2\in\C(x)$, we can account for this hypothesis selection procedure by defining a $p$-value that conditions on the event $\{\hat{C}_1,\hat{C}_2\in\C(X)\}$. This yields a correctly sized test. This p-value can be written as follows :
+\[
+\mathbb{P}_{\Hzero}\left(\norm{\bar{X}_{\hat{C}_1} - \bar{X}_{\hat{C}_2}} \geq \norm{\bar{x}_{\hat{C}_1} - \bar{x}_{\hat{C}_2}} \,|\, \hat{C}_1, \hat{C}_2 \in \C(\mathbf{X})\right)
+\]
+This basically amounts to determine the proportion of realisations of $\mathbf{X}$ for which the difference in cluster means is at least as large as the difference in cluster means in the observed dataset, when in truth $\bar{\mu}_{\hat{C_1}} = \bar{\mu}_{\hat{C_2}}$, \textit{among all realisations of $\mathbf{X}$ which lead to the creation of clusters $\hat{C}_1$ and $\hat{C}_2$}.
+
+We now say that a test of $\Hzero$ based on a realisation $\mathbf{X}$ controls the \textit{selective type I error rate for clustering} at level $\alpha$ if
+\[
+\mathbb{P}_{\Hzero}\left( \text{reject } \Hzero \text{ based on } X \text{ at level } \alpha \,\middle|\, G_1, G_2 \in \C(\mathbf{X}) \right) \leq \alpha, \quad \forall\, 0 \leq \alpha \leq 1.
+\]
+Rejecting $\Hzero$ based on $\mathbf{X}$ at level $\alpha$ means that our defined p-value computed on the realisation $\mathbf{X}$ is below $\alpha$.
+
+\subsection{Computational issues regarding the conditional p-value}
+
+Conditioning on the event $\{\hat{C}_1, \hat{C}_2 \in \C(\mathbf(X)\}$ makes the conditional p-value non computable.
+
+\paragraph{Without conditioning ?} Considering the conditioning-free framework from before, we have that, under $\Hzero$,
+\[
+\frac{1}{\sigma\sqrt{\frac{1}{\hat{C_1}} + \frac{1}{\hat{C}_2}}}\norm{\bar{X}_{\hat{C}_1} - \bar{X}_{\hat{C}_2}} \sim \chi_q
+\]
+Therefore, our test statistic is a pivot test statistic under $\Hzero$ (ie. its ditribution under $\Hzero$ doesn't depend on unknown parameters like $\mu$, $\sigma$ being known). We can then compute its p-value without any problem.
+
+\paragraph{With conditioning ?} Coming back to the conditioning framework, we hava that the conditional test statistic $\norm{\bar{X}_{\hat{C}_1} - \bar{X}_{\hat{C_2}}} \, | \, \hat{C}_1, \hat{C}_2 \in \C(\mathbf{X})$ doesn't follow a chi distribution anymore. Let us note $p(\mu, \sigma)$ this p-value and $\mathcal{S}$ the set of realizations of $\mathbf{X}$ for which applying a clustering algorithm will give $\hat{C}_1$ and $\hat{C}_2$ as cluster outputs (among other possible cluster outputs). This p-value writes :
+\[
+p(\mu,\sigma)=\mathbb P_{\Hzero}\big(\norm{\bar{X}_1 - \bar{X}_2}\ge \norm{\bar{x}_1 - \bar{x}_2}\ \big|\ X\in\mathcal S\big)=\frac{\mathbb P_{\Hzero}\big(\norm{\bar{X}_1 - \bar{X}_2}\ge \norm{\bar{x}_1 - \bar{x}_2},\,X\in\mathcal S\big)}{\mathbb P_{\Hzero}(X\in\mathcal S)}
+\]
+We can clearly see that, under $\Hzero$, our p-value depends on aspects of $\mu$ that are not known, regarding the joint probability in the numerator and the probability that $X \in \mathcal{S}$ in the denominator, and therefore cannot be computed. These are called nuisance parameters.
+
+\paragraph{Nuisance parameters} Let
+$\nu = \nu(\hat C_1,\hat C_2)\in\mathbb{R}^n$ be defined by
+\[
+  [\nu(\hat C_1,\hat C_2)]_i
+  = \frac{\mathbf{1}\{i\in\hat C_1\}}{|\hat C_1|}
+  - \frac{\mathbf{1}\{i\in\hat C_2\}}{|\hat C_2|},
+  \qquad
+  \norm{\nu}^2 = \frac{1}{|\hat C_1|} + \frac{1}{|\hat C_2|}.
+\]
+Then, our statistic of interest writes
+\begin{equation*}
+  \bar X_{\hat C_1} - \bar X_{\hat C_2} = X^T\nu .
+  \label{eq:diffmeans}
+\end{equation*}
+
+The orthogonal projection onto $\mathrm{span}(\nu)$ is
+\begin{equation*}
+  \pi_{\nu} = \frac{\nu\nu^T}{\left\|{\nu}\right\|_2^2}.
+\end{equation*}
+
+The projection onto the orthogonal complement of $\nu$ is
+\begin{equation}
+  \pi_{\nu^\perp} = I_n - \frac{\nu\nu^T}{{\left\|\nu\right\|}_2^2}.
+\end{equation}
+
+Since $I_n = \pi_{\nu^\perp} + \dfrac{\nu\nu^T}{\norm{\nu}^2}$, multiplying by $X$ on the left gives
+\begin{equation}
+  X = \pi_{\nu^\perp} X + \frac{\nu\nu^T}{\norm{\nu}^2}\,X = \pi_{\nu^\perp} X + \pi_{\nu} X
+  \label{eq:decomp}
+\end{equation}
+Each column of $X$ (a vector in $\mathbb{R}^n$) is split into its component orthogonal to
+$\nu$ and its component along $\nu$.
+
+Under $\Hzero$, we have $\bar{\mu}_{\hat{C}_1} = \bar{\mu}_{\hat{C}_2}$ so that $\mathbb{E}[X^T\nu] = \mathbb{E}[\bar X_{\hat C_1} - \bar X_{\hat C_2}] = \bar{\mu}_{\hat{C}_1} - \bar{\mu}_{\hat{C}_2} = 0$. Therefore, $\mathbb{E}[\pi_{\nu}X] = \mathbb{E}\left[\frac{\nu (X^T\nu)^T}{\norm{\nu}}\right] = 0$. 
+
+However, it doesn't tell us anything about $\mathbb{E}[\pi_{\nu^\perp}X] = \pi_{\nu^\perp}\mu$, which acts as a nuisance parameter.
+
+\subsection{Main result}
+
+To solve the issue mentioned before, we simply condition our p-value on the events $\{\pi_{\nu^\perp}X = \pi_{\nu^\perp}x\}$ so that the randomness of $\mathbf{X}$ is limited to the difference in cluster means. We write :
+
+\[
+p\big(x; \{\hat C_1, \hat C_2\}\big)
+=\]
+\[\mathbb{P}_{\Hzero}\Big(
+\big\|\bar X_{\hat C_1} - \bar X_{\hat C_2}\big\|_2 \ge \big\|\bar x_{\hat C_1} - \bar x_{\hat C_2}\big\|_2
+\;\Big|\;
+\hat C_1, \hat C_2 \in \mathcal{C}(X),\;
+\pi^{\perp}_{\nu(\hat C_1,\hat C_2)} X = \pi^{\perp}_{\nu(\hat C_1,\hat C_2)} x,\;\]
+\[
+\mathrm{dir}\big(\bar X_{\hat C_1} - \bar X_{\hat C_2}\big) = \mathrm{dir}\big(\bar x_{\hat C_1} - \bar x_{\hat C_2}\big)
+\Big)
+\]
+Where $\operatorname{dir}(w) = \frac{w}{\|w\|_2}\,\mathbf{1}\{w \neq 0\}$.
+
+This conditional p-value, conditioned on all these events, makes it possible to control the type I error rate. This comes from the following theorem. 
+
+\begin{theorem}
+For any realization $x$ from $\mathbf{X} \sim \mathcal{N}(\mu I_n, \sigma^2 I_q)$ and for any non-overlapping groups of observations $G_1, G_2 \subseteq \{1,2,\ldots,n\}$,
+\begin{equation}
+p\big(x; \{G_1,G_2\}\big) = 1 - \mathbb{F}\!\left(\big\|\bar x_{G_1} - \bar x_{G_2}\big\|_2;\ \sigma\sqrt{\tfrac{1}{|G_1|} + \tfrac{1}{|G_2|}},\ \mathcal{S}\big(x; \{G_1,G_2\}\big)\right),
+\end{equation}
+where $p(\cdot\,;\cdot)$ is defined as before, $\mathbb{F}(t; c, \mathcal{S})$ denotes the cumulative distribution function of a $c\cdot\chi_q$ random variable truncated to the set $\mathcal{S}$, and
+\begin{equation}
+\mathcal{S}\big(x; \{G_1,G_2\}\big) = \left\{ \phi \ge 0 :\ G_1, G_2 \in \mathcal{C}\!\left( \pi^{\perp}_{\nu(G_1,G_2)} x + \phi \left(\tfrac{1}{|G_1|} + \tfrac{1}{|G_2|}\right)\nu(G_1,G_2)\, \operatorname{dir}\big(\bar x_{G_1} - \bar x_{G_2}\big)^{\!\top} \right) \right\}.
+\end{equation}
+Furthermore, if $H_0^{\{G_1,G_2\}}$ is true, then
+\begin{equation}
+\mathbb{P}_{H_0^{\{G_1,G_2\}}}\Big( p\big(X; \{G_1,G_2\}\big) \le \alpha \ \Big|\ G_1, G_2 \in \mathcal{C}(X) \Big) = \alpha, \quad \forall\, 0 \le \alpha \le 1.
+\end{equation}
+That is, rejecting $H_0^{\{G_1,G_2\}}$ whenever $p(x; \{G_1,G_2\})$ is below $\alpha$ controls the selective type I error rate at level $\alpha$.
+\end{theorem}
+
+Stated as this, the theorem may seem complicated to understand. We will briefly sketch a demonstration to better understand it.
+
+\paragraph{Sketch of demonstration} Let us first rewrite $\mathbf{X}$ to make the decomposition along ${\nu(G_1, G_2)}$ appear.
+
+\begin{align*}
+X &= \pi^{\perp}_{\nu} X + \big(I_n - \pi^{\perp}_{\nu}\big) X \\
+  &= \pi^{\perp}_{\nu} X + \frac{\nu \nu^{\top} X}{\|\nu\|_2^2} \\
+  &= \pi^{\perp}_{\nu} X + \frac{\nu\,(X^{\top}\nu)^{\top}}{\|\nu\|_2^2} \\
+  &= \pi^{\perp}_{\nu} X + \frac{\nu\,\|X^{\top}\nu\|_2\,(X^{\top}\nu)^{\top}}{\|X^{\top}\nu\|_2\,\|\nu\|_2^2} \\
+  &= \pi^{\perp}_{\nu} X + \frac{\nu\,\|X^{\top}\nu\|_2}{\|\nu\|_2^2}\,\operatorname{dir}(X^{\top}\nu)^{\top} \\
+  &= \pi^{\perp}_{\nu} X + \left(\frac{\|X^{\top}\nu\|_2}{\|\nu\|_2^2}\right)\nu\,\operatorname{dir}(X^{\top}\nu)^{\top}
+\end{align*}
+Especially, when $\nu = \nu(G_1, G_2)$,
+\[X = \pi^{\perp}_{\nu(G_1,G_2)} X + \frac{\|X^{\top}\nu(G_1,G_2)\|_2}{\|\nu(G_1,G_2)\|_2^2}\,\nu(G_1,G_2)\,\operatorname{dir}\big(\bar X_{G_1} - \bar X_{G_2}\big)^{\top}\]
+
+So, from here,
+\begin{align*}
+p\big(x; \{G_1,G_2\}\big)
+= \mathbb{P}_{H_0^{\{G_1,G_2\}}}\Bigg(
+&\big\|\bar X_{G_1} - \bar X_{G_2}\big\|_2 \ge \big\|\bar x_{G_1} - \bar x_{G_2}\big\|_2
+\;\Bigg|\; \\
+&G_1, G_2 \in \mathcal{C}\Bigg(
+\pi^{\perp}_{\nu(G_1,G_2)}\, x
++ \frac{\big\|\bar X_{G_1} - \bar X_{G_2}\big\|_2}{\frac{1}{|G_1|} + \frac{1}{|G_2|}}\;
+\nu(G_1,G_2)\, \operatorname{dir}\big(\bar x_{G_1} - \bar x_{G_2}\big)^{\top}\Bigg),\\
+&\pi^{\perp}_{\nu(G_1,G_2)} X = \pi^{\perp}_{\nu(G_1,G_2)}\, x,\;
+\operatorname{dir}\big(\bar X_{G_1} - \bar X_{G_2}\big) = \operatorname{dir}\big(\bar x_{G_1} - \bar x_{G_2}\big)
+\Bigg)
+\end{align*}
+
+However, $\big\|\bar X_{G_1} - \bar X_{G_2}\big\|_2 \;\perp\!\!\!\perp\; \pi^{\perp}_{\nu(G_1,G_2)} X$ and under $H_0^{\{G_1,G_2\}} : \bar\mu_{G_1} = \bar\mu_{G_2}$, $\big\|\bar X_{G_1} - \bar X_{G_2}\big\|_2
+\;\perp\!\!\!\perp\;
+\operatorname{dir}\big(\bar X_{G_1} - \bar X_{G_2}\big)$. Therefore,
+
+\begin{align*}
+p(\mathbf{x}; \{\mathcal{G}_1,\mathcal{G}_2\})
+&= \mathbb{P}_{H_0^{\{\mathcal{G}_1,\mathcal{G}_2\}}}\Bigg(
+\big\|\bar X_{\mathcal{G}_1} - \bar X_{\mathcal{G}_2}\big\|_2 \ge \big\|\bar x_{\mathcal{G}_1} - \bar x_{\mathcal{G}_2}\big\|_2
+\;\Bigg|\; \\
+&\mathcal{G}_1,\mathcal{G}_2 \in \mathcal{C}\Bigg(
+\boldsymbol{\pi}^{\perp}_{\nu(\mathcal{G}_1,\mathcal{G}_2)}\mathbf{x}
++ \Bigg(\frac{\big\|\bar X_{\mathcal{G}_1} - \bar X_{\mathcal{G}_2}\big\|_2}{\frac{1}{|\mathcal{G}_1|}+\frac{1}{|\mathcal{G}_2|}}\Bigg)
+\nu(\mathcal{G}_1,\mathcal{G}_2)\,\mathrm{dir}\big(\bar x_{\mathcal{G}_1} - \bar x_{\mathcal{G}_2}\big)^{T}
+\Bigg)\Bigg) \\
+&= \mathbb{P}_{H_0^{\{\mathcal{G}_1,\mathcal{G}_2\}}}\Bigg(
+\big\|\bar X_{\mathcal{G}_1} - \bar X_{\mathcal{G}_2}\big\|_2 \ge \big\|\bar x_{\mathcal{G}_1} - \bar x_{\mathcal{G}_2}\big\|_2
+\;\Bigg|\;
+\big\|\bar X_{\mathcal{G}_1} - \bar X_{\mathcal{G}_2}\big\|_2 \in \mathcal{S}\big(\mathbf{x}; \{\mathcal{G}_1,\mathcal{G}_2\}\big)
+\Bigg)
+\end{align*}
+
+Under $H_0^{\{G_1,G_2\}} : \bar\mu_{G_1} = \bar\mu_{G_2}$,
+\[
+\frac{\big\|\bar X_{G_1} - \bar X_{G_2}\big\|_2^2}{\sigma^2\left(\frac{1}{|G_1|} + \frac{1}{|G_2|}\right)} \sim \chi^2_q
+\]
+Therefore,
+\[
+\big\|\bar X_{G_1} - \bar X_{G_2}\big\|_2 \sim \sigma\sqrt{\frac{1}{|G_1|} + \frac{1}{|G_2|}}\;\cdot\;\chi_q
+\]
+So, for $\phi \sim \sigma\sqrt{\frac{1}{|G_1|} + \frac{1}{|G_2|}}\;\cdot\;\chi_q$, we have
+\begin{align*}
+p\big(x; \{G_1,G_2\}\big)
+&= \mathbb{P}\Big(\phi \ge \big\|\bar x_{G_1} - \bar x_{G_2}\big\|_2 \;\Big|\; \phi \in \mathcal{S}\big(x; \{G_1,G_2\}\big)\Big) \\
+&= 1 - \mathbb{F}\!\left(\big\|\bar x_{G_1} - \bar x_{G_2}\big\|_2;\ \sigma\sqrt{\frac{1}{|G_1|} + \frac{1}{|G_2|}},\ \mathcal{S}\big(x; \{G_1,G_2\}\big)\right)
+\end{align*}
+Where $\mathbb{F}$ is the cdf of a $c \, \cdot \, \chi_q$ random variable truncated to the set $\mathcal{S}$.
+
+In the end, this set writes :
+\begin{align*}
+    \mathcal{S}\big(x; \{G_1,G_2\}\big) &= \left\{ \phi \ge 0 :\ G_1, G_2 \in \mathcal{C}\!\left( \pi^{\perp}_{\nu(G_1,G_2)} x + \phi \left(\tfrac{1}{|G_1|} + \tfrac{1}{|G_2|}\right)\nu(G_1,G_2)\, \operatorname{dir}\big(\bar x_{G_1} - \bar x_{G_2}\big)^{\!\top} \right) \right\}
+\end{align*}
+
+\paragraph{Small remark about the computation} At this point, we can see that computing this conditional p-value really comes down to obtaining information about the set $\mathcal{S}$, ie. the set of realizations on which applying a clustering algorithm leads to the clusters $G_1$ and $G_2$ (among other clusters).
+
+Thanks to conditioning on all of the events, we get :
+
+\[
+\mathbb{P}_{H_0^{\{G_1,G_2\}}}\Big(p\big(X;\{G_1,G_2\}\big) \le \alpha \;\Big|\; G_1,G_2 \in \mathcal{C}(X)\Big)
+\]
+\begin{align*}
+&= \mathbb{E}_{H_0^{\{G_1,G_2\}}}\Big[\mathbf{1}\big\{p\big(X;\{G_1,G_2\}\big) \le \alpha\big\} \;\Big|\; G_1,G_2 \in \mathcal{C}(X)\Big] \\
+&= \mathbb{E}_{H_0^{\{G_1,G_2\}}}\Big[\mathbb{E}_{H_0}\Big[\mathbf{1}\big\{p\big(X;\{G_1,G_2\}\big) \le \alpha\big\} \;\Big|\; G_1,G_2 \in \mathcal{C}(X),\ \pi^{\perp}_{\nu(G_1,G_2)}X,\ \operatorname{dir}\big(\bar X_{G_1}-\bar X_{G_2}\big)\Big] \;\Big|\; G_1,G_2 \in \mathcal{C}(X)\Big] \\
+&= \mathbb{E}_{H_0^{\{G_1,G_2\}}}\Big[\alpha \;\Big|\; G_1,G_2 \in \mathcal{C}(X)\Big] \\
+&= \alpha
+\end{align*}
+Where the 3rd equality comes from the fact that :
+\[
+\mathbb{P}_{H_0^{\{G_1,G_2\}}}\Big(p\big(X;\{G_1,G_2\}\big) \le \alpha \;\Big|\; G_1,G_2 \in \mathcal{C}(X),\ \pi^{\perp}_{\nu(G_1,G_2)}X = \pi^{\perp}_{\nu(G_1,G_2)}x,\ \]
+\[\operatorname{dir}\big(\bar X_{G_1}-\bar X_{G_2}\big) = \operatorname{dir}\big(\bar x_{G_1}-\bar x_{G_2}\big)\Big) = \alpha
+\]
+
+\paragraph{Conditioning interest} So in the end, conditioning on the clusters $G_1$ and $G_2$ helps monitoring the inflation of the type I error rate because it constrains the $H_0$ hypothesis only to the value of the scalar variables $\bar{X}_{G_1}$ and $\bar{X}_{G_2}$, not depending on the choice of any clusters : they are fixed beforehand. Indeed, instead of "blindly" choosing  any 2 groups of data at random off of one realization, ignorant of the fact that the data is clustered, we only consider realizations for which any clustering algorithm would lead to the 2 clusters we want to test our data on. Therefore, these are not random choices anymore, but fixed clusters we always consider for each dataset we would want to test, thus making the null hypothesis not depend on the dataset anymore. 
+
+\subsection{Interpretation of the set $\mathcal{S}$ and the perturbed observations $x'(\phi)$}
+
+From the definition of the set $\mathcal{S}$, adapting to the clusters $\hat{\C}_1$ and $\hat{\C}_2$, we write :
+\[
+\mathcal{S} \equiv \mathcal{S}\big(x; \{\hat C_1,\hat C_2\}\big) = \big\{\phi \ge 0 \;:\; \hat C_1, \hat C_2 \in \mathcal{C}\big(x'(\phi)\big)\big\}
+\]
+Where the perturbed observations $x'(\phi)$ are given by:
+\[
+x'(\phi) = \pi^{\perp}_{\hat\nu}\, x + \frac{\phi}{\frac{1}{|\hat C_1|} + \frac{1}{|\hat C_2|}}\; \hat\nu\, \operatorname{dir}\big(\bar x_{\hat C_1} - \bar x_{\hat C_2}\big)^{T},
+\qquad \hat\nu = \nu(\hat C_1, \hat C_2)
+\]
+$\phi$ being the realisation of a random variable $\Phi \sim \sigma\sqrt{\frac{1}{|\hat{C}_1|} + \frac{1}{|\hat{C}_2|}}\;\cdot\;\chi_q$.
+
+Thanks to the decompositions $\pi^\perp_{\hat\nu}x = x-\frac{\hat\nu\hat\nu^\top x}{\|\hat\nu\|_2^2}$ and $\hat\nu^\top x=(x^\top\hat\nu)^\top=\|\bar x_{\hat C_1}-\bar x_{\hat C_2}\|_2\operatorname{dir}(\bar x_{\hat C_1}-\bar x_{\hat C_2})^T$, and also thanks to the fact that
+\[
+\frac{\hat\nu_i}{\|\hat\nu\|_2^2}=
+\begin{cases}
+\dfrac{\frac{1}{|\hat{C}_1|}}{\frac{1}{|\hat{C}_1|}+\frac{1}{|\hat{C}_2|}}=\dfrac{|\hat{C}_2|}{|\hat{C}_1|+|\hat{C}_2|} & i\in\hat C_1\\[3mm]
+\dfrac{-\frac{1}{|\hat{C}_2|}}{\frac{1}{|\hat{C}_1|}+\frac{1}{|\hat{C}_2|}}=-\dfrac{|\hat{C}_1|}{|\hat{C}_1|+|\hat{C}_2|} & i\in\hat C_2\\[3mm]
+0 & \text{otherwise}
+\end{cases}
+\]
+We get :
+\[
+[x'(\phi)]_i =
+\begin{cases}
+x_i + \dfrac{|\hat C_2|}{|\hat C_1| + |\hat C_2|}\Big(\phi - \big\|\bar x_{\hat C_1} - \bar x_{\hat C_2}\big\|_2\Big)\operatorname{dir}\big(\bar x_{\hat C_1} - \bar x_{\hat C_2}\big), & \text{if } i \in \hat C_1, \\[4mm]
+x_i - \dfrac{|\hat C_1|}{|\hat C_1| + |\hat C_2|}\Big(\phi - \big\|\bar x_{\hat C_1} - \bar x_{\hat C_2}\big\|_2\Big)\operatorname{dir}\big(\bar x_{\hat C_1} - \bar x_{\hat C_2}\big), & \text{if } i \in \hat C_2, \\[4mm]
+x_i, & \text{if } i \notin \hat C_1 \cup \hat C_2.
+\end{cases}
+\]
+
+With this definition for each $i$-th row of the perturbed observations, $\mathcal{S}$ can be interpreted as the set of values of $\phi$ for which any perturbation of the groups $\hat{C}_1$ and $\hat{C}_2$ would still have the clustering algorithm keep the observations in these same groups.
+
+Let us suppose $\Phi = \norm{\bar{X}_{\hat{C}_1} - \bar{X}_{\hat{C}_2}}$ and let us denote $\phi$ a realisation of $\Phi$ for the sake of this example. Then, had the observed differences in cluster means been the same as of the realization of the test statistic, the clusters would be pushed closer together if $\phi \leq \norm{\bar{x}_{\hat{C}_1} - \bar{x}_{\hat{C}_2}}$, and pulled further away if $\phi \geq \norm{\bar{x}_{\hat{C}_1} - \bar{x}_{\hat{C}_2}}$. That is, we want to keep the values of the realizations $\phi$ of the test statistic for which we would still end up constructing the very same clusters $\hat{C}_1$ and $\hat{C}_2$. 
+
+So $\mathcal{S}$ serves as a selection criterion on the values of the test statistic for which we obtain the clusters we want to test the mean difference between (according to a given clustering algorithm). And this is determined thanks to the perturbed dataset $x'(\phi)$.
 
 %====================================================================
 \begin{thebibliography}{9}
