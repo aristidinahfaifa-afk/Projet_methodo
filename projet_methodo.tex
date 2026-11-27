@@ -26,6 +26,8 @@
 % Red mark for things still to complete
 \newcommand{\todo}[1]{{\color{red}\textbf{[TODO: #1]}}}
 
+\newtheorem{theorem}{Theorem}
+
 \title{Selective inference for hierarchical clustering:\\ reading notes}
 \author{}
 \date{\today}
@@ -424,7 +426,17 @@ Let us suppose $\Phi = \norm{\bar{X}_{\hat{C}_1} - \bar{X}_{\hat{C}_2}}$ and let
 
 So $\mathcal{S}$ serves as a selection criterion on the values of the test statistic for which we obtain the clusters we want to test the mean difference between (according to a given clustering algorithm). And this is determined thanks to the perturbed dataset $x'(\phi)$.
 
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=1\linewidth]{exemple3.png}
+    \caption{Reproduction of Figure~3 of~\cite{gao2024}: perturbed observations $x'(\phi)$ and the set $\mathcal{S}$. The means, $n$ and $\sigma$ are chosen by us (they are not given in the article), and $\mathcal{S}$ is obtained by a grid search over $\phi$, so it is approximate.}
+  \label{fig:fig3}
+\end{figure}
+
+Figure~\ref{fig:fig3} illustrates this: for small values of $\phi$ the two clusters are pushed together and the clustering algorithm no longer recovers $\hat C_1$ and $\hat C_2$, while for $\phi$ in $\mathcal{S}$ it does.
 %====================================================================
+
 \begin{thebibliography}{9}
 \bibitem{gao2024}
 L.~L. Gao, J.~Bien, and D.~Witten.
